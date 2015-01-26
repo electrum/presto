@@ -119,6 +119,10 @@ statement
     | DESCRIBE INPUT identifier                                        #describeInput
     | DESCRIBE OUTPUT identifier                                       #describeOutput
     | SET PATH pathSpecification                                       #setPath
+    | CREATE (OR REPLACE)? FUNCTION qualifiedName
+        parameterDeclarationList returnsClause routineCharacteristic*
+        routineStatement                                               #createFunction
+    | DROP FUNCTION (IF EXISTS)? qualifiedName                         #dropFunction
     ;
 
 query
@@ -458,6 +462,134 @@ pathSpecification
     : pathElement (',' pathElement)*
     ;
 
+parameterDeclarationList
+    : '(' (parameterDeclaration (',' parameterDeclaration)*)? ')'
+    ;
+
+parameterDeclaration
+    : parameterMode? identifier? type (DEFAULT valueExpression)?
+    ;
+
+parameterMode
+    : IN | OUT | INOUT
+    ;
+
+returnsClause
+    : RETURNS returnType=type (CAST FROM castFromType=type)?
+    ;
+
+routineCharacteristic
+    : SPECIFIC value=qualifiedName             #specificCharacteristic
+    | DETERMINISTIC                            #isDeterministicCharacteristic
+    | NOT DETERMINISTIC                        #isNotDeterministicCharacteristic
+    | NO SQL                                   #noSqlAccessCharacteristic
+    | CONTAINS SQL                             #containsSqlAccessCharacteristic
+    | READS SQL DATA                           #readsSqlDataAccessCharacteristic
+    | MODIFIES SQL DATA                        #modifiesSqlDataAccessCharacteristic
+    | RETURNS NULL ON NULL INPUT               #returnsNullOnNullInputCharacteristic
+    | CALLED ON NULL INPUT                     #calledOnNullInputCharacteristic
+    | DYNAMIC RESULT SETS value=INTEGER_VALUE  #returnedResultSetsCharacteristic
+    ;
+
+routineStatement
+    : controlStatement
+    | statement
+    ;
+
+controlStatement
+    : callStatement
+    | returnStatement
+    | variableDeclaration
+    | assignmentStatement
+    | simpleCaseStatement
+    | searchedCaseStatement
+    | ifStatement
+    | iterateStatement
+    | leaveStatement
+    | compoundStatement
+    | loopStatement
+    | whileStatement
+    | repeatStatement
+    ;
+
+callStatement
+    : CALL qualifiedName '(' (expression (',' expression)*)? ')'
+    ;
+
+returnStatement
+    : RETURN valueExpression
+    ;
+
+variableDeclaration
+    : DECLARE identifier (',' identifier)* type (DEFAULT valueExpression)?
+    ;
+
+assignmentStatement
+    : SET (('(' identifier (',' identifier)* ')') | identifier) EQ expression
+    ;
+
+simpleCaseStatement
+    : CASE expression caseStatementWhenClause+ elseClause? END CASE
+    ;
+
+searchedCaseStatement
+    : CASE caseStatementWhenClause+ elseClause? END CASE
+    ;
+
+caseStatementWhenClause
+    : WHEN expression THEN sqlStatementList
+    ;
+
+ifStatement
+    : IF expression THEN sqlStatementList elseIfClause* elseClause? END IF
+    ;
+
+elseIfClause
+    : ELSEIF expression THEN sqlStatementList
+    ;
+
+elseClause
+    : ELSE sqlStatementList
+    ;
+
+iterateStatement
+    : ITERATE identifier
+    ;
+
+leaveStatement
+    : LEAVE identifier
+    ;
+
+compoundStatement
+    : (label=identifier ':')? BEGIN
+      (variableDeclaration ';')*
+      sqlStatementList?
+      END
+    ;
+
+loopStatement
+    : (label=identifier ':')? LOOP
+      sqlStatementList
+      END LOOP
+    ;
+
+whileStatement
+    : (label=identifier ':')? WHILE expression DO
+      sqlStatementList
+      END WHILE
+    ;
+
+repeatStatement
+    : (label=identifier ':')? REPEAT
+      sqlStatementList
+      UNTIL expression
+      END REPEAT
+    ;
+
+sqlStatementList
+    : (routineStatement ';')+
+    ;
+
 privilege
     : SELECT | DELETE | INSERT
     ;
@@ -499,27 +631,28 @@ number
 nonReserved
     // IMPORTANT: this rule must only contain tokens. Nested rules are not supported. See SqlParser.exitNonReserved
     : ADD | ADMIN | ALL | ANALYZE | ANY | ARRAY | ASC | AT
-    | BERNOULLI
-    | CALL | CASCADE | CATALOGS | COLUMN | COLUMNS | COMMENT | COMMIT | COMMITTED | CURRENT
-    | DATA | DATE | DAY | DEFINER | DESC | DISTRIBUTED | DOUBLE
-    | EXCLUDING | EXPLAIN
-    | FETCH | FILTER | FIRST | FOLLOWING | FORMAT | FUNCTIONS
+    | BEGIN | BERNOULLI
+    | CALL | CALLED | CASCADE | CATALOGS | COLUMN | COLUMNS | COMMENT | COMMIT | COMMITTED | CONTAINS | CURRENT
+    | DATA | DATE | DAY | DECLARE | DEFINER | DEFAULT | DESC | DETERMINISTIC | DISTRIBUTED | DO | DOUBLE | DYNAMIC
+    | ELSEIF | EXCLUDING | EXPLAIN
+    | FETCH | FILTER | FIRST | FOLLOWING | FORMAT | FUNCTION | FUNCTIONS
     | GRANT | GRANTED | GRANTS | GRAPHVIZ
     | HOUR
-    | IF | IGNORE | INCLUDING | INPUT | INTERVAL | INVOKER | IO | ISOLATION
+    | IF | IGNORE | INCLUDING | INOUT | INPUT | INTERVAL | INVOKER | IO | ITERATE | ISOLATION
     | JSON
-    | LAST | LATERAL | LEVEL | LIMIT | LOGICAL
-    | MAP | MINUTE | MONTH
+    | LAST | LATERAL | LEAVE | LEVEL | LIMIT | LOGICAL | LOOP
+    | MAP | MINUTE | MODIFIES | MONTH
     | NEXT | NFC | NFD | NFKC | NFKD | NO | NONE | NULLIF | NULLS
-    | OFFSET | ONLY | OPTION | ORDINALITY | OUTPUT | OVER
+    | OFFSET | ONLY | OUT | OPTION | ORDINALITY | OUTPUT | OVER
     | PARTITION | PARTITIONS | PATH | POSITION | PRECEDING | PRECISION | PRIVILEGES | PROPERTIES
-    | RANGE | READ | RENAME | REPEATABLE | REPLACE | RESET | RESPECT | RESTRICT | REVOKE | ROLE | ROLES | ROLLBACK | ROW | ROWS
+    | RANGE | READ | READS | RENAME | REPEATABLE | REPLACE | RESET | RESPECT | RESTRICT | RESULT
+    | REPEAT | RETURN | RETURNS | REVOKE | ROLE | ROLES | ROLLBACK | ROW | ROWS
     | SCHEMA | SCHEMAS | SECOND | SECURITY | SERIALIZABLE | SESSION | SET | SETS
-    | SHOW | SOME | START | STATS | SUBSTRING | SYSTEM
+    | SHOW | SOME | SPECIFIC | SQL | START | STATS | SUBSTRING | SYSTEM
     | TABLES | TABLESAMPLE | TEXT | TIES | TIME | TIMESTAMP | TO | TRANSACTION | TRY_CAST | TYPE
-    | UNBOUNDED | UNCOMMITTED | USE | USER
+    | UNBOUNDED | UNCOMMITTED | UNTIL | USE | USER
     | VALIDATE | VERBOSE | VIEW
-    | WITHOUT | WORK | WRITE
+    | WHILE | WITHOUT | WORK | WRITE
     | YEAR
     | ZONE
     ;
@@ -535,10 +668,12 @@ ARRAY: 'ARRAY';
 AS: 'AS';
 ASC: 'ASC';
 AT: 'AT';
+BEGIN: 'BEGIN';
 BERNOULLI: 'BERNOULLI';
 BETWEEN: 'BETWEEN';
 BY: 'BY';
 CALL: 'CALL';
+CALLED: 'CALLED';
 CASCADE: 'CASCADE';
 CASE: 'CASE';
 CAST: 'CAST';
@@ -549,6 +684,7 @@ COMMENT: 'COMMENT';
 COMMIT: 'COMMIT';
 COMMITTED: 'COMMITTED';
 CONSTRAINT: 'CONSTRAINT';
+CONTAINS: 'CONTAINS';
 CREATE: 'CREATE';
 CROSS: 'CROSS';
 CUBE: 'CUBE';
@@ -563,15 +699,21 @@ DATA: 'DATA';
 DATE: 'DATE';
 DAY: 'DAY';
 DEALLOCATE: 'DEALLOCATE';
+DECLARE: 'DECLARE';
+DEFAULT: 'DEFAULT';
 DEFINER: 'DEFINER';
 DELETE: 'DELETE';
 DESC: 'DESC';
 DESCRIBE: 'DESCRIBE';
+DETERMINISTIC: 'DETERMINISTIC';
 DISTINCT: 'DISTINCT';
 DISTRIBUTED: 'DISTRIBUTED';
+DO: 'DO';
 DOUBLE: 'DOUBLE';
 DROP: 'DROP';
+DYNAMIC: 'DYNAMIC';
 ELSE: 'ELSE';
+ELSEIF: 'ELSEIF';
 END: 'END';
 ESCAPE: 'ESCAPE';
 EXCEPT: 'EXCEPT';
@@ -589,6 +731,7 @@ FOR: 'FOR';
 FORMAT: 'FORMAT';
 FROM: 'FROM';
 FULL: 'FULL';
+FUNCTION: 'FUNCTION';
 FUNCTIONS: 'FUNCTIONS';
 GRANT: 'GRANT';
 GRANTED: 'GRANTED';
@@ -603,6 +746,7 @@ IGNORE: 'IGNORE';
 IN: 'IN';
 INCLUDING: 'INCLUDING';
 INNER: 'INNER';
+INOUT: 'INOUT';
 INPUT: 'INPUT';
 INSERT: 'INSERT';
 INTERSECT: 'INTERSECT';
@@ -612,10 +756,12 @@ INVOKER: 'INVOKER';
 IO: 'IO';
 IS: 'IS';
 ISOLATION: 'ISOLATION';
+ITERATE: 'ITERATE';
 JOIN: 'JOIN';
 JSON: 'JSON';
 LAST: 'LAST';
 LATERAL: 'LATERAL';
+LEAVE: 'LEAVE';
 LEFT: 'LEFT';
 LEVEL: 'LEVEL';
 LIKE: 'LIKE';
@@ -623,8 +769,10 @@ LIMIT: 'LIMIT';
 LOCALTIME: 'LOCALTIME';
 LOCALTIMESTAMP: 'LOCALTIMESTAMP';
 LOGICAL: 'LOGICAL';
+LOOP: 'LOOP';
 MAP: 'MAP';
 MINUTE: 'MINUTE';
+MODIFIES: 'MODIFIES';
 MONTH: 'MONTH';
 NATURAL: 'NATURAL';
 NEXT: 'NEXT';
@@ -646,6 +794,7 @@ OPTION: 'OPTION';
 OR: 'OR';
 ORDER: 'ORDER';
 ORDINALITY: 'ORDINALITY';
+OUT: 'OUT';
 OUTER: 'OUTER';
 OUTPUT: 'OUTPUT';
 OVER: 'OVER';
@@ -660,13 +809,18 @@ PRIVILEGES: 'PRIVILEGES';
 PROPERTIES: 'PROPERTIES';
 RANGE: 'RANGE';
 READ: 'READ';
+READS: 'READS';
 RECURSIVE: 'RECURSIVE';
 RENAME: 'RENAME';
+REPEAT: 'REPEAT';
 REPEATABLE: 'REPEATABLE';
 REPLACE: 'REPLACE';
 RESET: 'RESET';
 RESPECT: 'RESPECT';
 RESTRICT: 'RESTRICT';
+RESULT: 'RESULT';
+RETURN: 'RETURN';
+RETURNS: 'RETURNS';
 REVOKE: 'REVOKE';
 RIGHT: 'RIGHT';
 ROLE: 'ROLE';
@@ -686,6 +840,8 @@ SET: 'SET';
 SETS: 'SETS';
 SHOW: 'SHOW';
 SOME: 'SOME';
+SPECIFIC: 'SPECIFIC';
+SQL: 'SQL';
 START: 'START';
 STATS: 'STATS';
 SUBSTRING: 'SUBSTRING';
@@ -708,6 +864,7 @@ UNBOUNDED: 'UNBOUNDED';
 UNCOMMITTED: 'UNCOMMITTED';
 UNION: 'UNION';
 UNNEST: 'UNNEST';
+UNTIL: 'UNTIL';
 USE: 'USE';
 USER: 'USER';
 USING: 'USING';
@@ -717,6 +874,7 @@ VERBOSE: 'VERBOSE';
 VIEW: 'VIEW';
 WHEN: 'WHEN';
 WHERE: 'WHERE';
+WHILE: 'WHILE';
 WITH: 'WITH';
 WITHOUT: 'WITHOUT';
 WORK: 'WORK';
