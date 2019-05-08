@@ -16,6 +16,7 @@ package io.prestosql.metadata;
 import io.airlift.slice.Slice;
 import io.prestosql.Session;
 import io.prestosql.connector.CatalogName;
+import io.prestosql.spi.Page;
 import io.prestosql.spi.block.BlockEncodingSerde;
 import io.prestosql.spi.connector.CatalogSchemaName;
 import io.prestosql.spi.connector.ColumnHandle;
@@ -540,5 +541,11 @@ public abstract class AbstractMockMetadata
     public Optional<ConstraintApplicationResult<TableHandle>> applyFilter(Session session, TableHandle table, Constraint constraint)
     {
         return Optional.empty();
+    }
+
+    @Override
+    public Optional<Page> materializeTable(Session session, TableHandle table)
+    {
+        throw new UnsupportedOperationException();
     }
 }

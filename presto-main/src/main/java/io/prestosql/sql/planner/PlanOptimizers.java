@@ -49,6 +49,7 @@ import io.prestosql.sql.planner.iterative.rule.GatherAndMergeWindows;
 import io.prestosql.sql.planner.iterative.rule.ImplementBernoulliSampleAsFilter;
 import io.prestosql.sql.planner.iterative.rule.ImplementFilteredAggregations;
 import io.prestosql.sql.planner.iterative.rule.InlineProjections;
+import io.prestosql.sql.planner.iterative.rule.MaterializeTableScan;
 import io.prestosql.sql.planner.iterative.rule.MergeFilters;
 import io.prestosql.sql.planner.iterative.rule.MergeLimitWithDistinct;
 import io.prestosql.sql.planner.iterative.rule.MergeLimitWithSort;
@@ -297,6 +298,7 @@ public class PlanOptimizers
                                         new PushLimitThroughSemiJoin(),
                                         new PushLimitIntoTableScan(metadata),
                                         new PushPredicateIntoTableScan(metadata, typeAnalyzer),
+                                        new MaterializeTableScan(metadata),
                                         new RemoveTrivialFilters(),
                                         new ImplementFilteredAggregations(),
                                         new SingleDistinctAggregationToGroupBy(),

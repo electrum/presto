@@ -27,6 +27,7 @@ import io.airlift.slice.Slice;
 import io.prestosql.Session;
 import io.prestosql.block.BlockEncodingManager;
 import io.prestosql.connector.CatalogName;
+import io.prestosql.spi.Page;
 import io.prestosql.spi.PrestoException;
 import io.prestosql.spi.QueryId;
 import io.prestosql.spi.block.BlockEncodingSerde;
@@ -1219,6 +1220,16 @@ public class MetadataManager
                 .map(result -> new ConstraintApplicationResult<>(
                         new TableHandle(catalogName, result.getHandle(), table.getTransaction(), Optional.empty()),
                         result.getRemainingFilter()));
+    }
+
+    @Override
+    public Optional<Page> materializeTable(Session session, TableHandle table)
+    {
+        CatalogName catalogName = table.getCatalogName();
+        ConnectorMetadata metadata = getMetadata(session, catalogName);
+        ConnectorSession connectorSession = session.toConnectorSession(catalogName);
+
+        return metadata.materializeTable(connectorSession, table.getConnectorHandle());
     }
 
     private ViewDefinition deserializeView(String data)

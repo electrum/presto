@@ -14,6 +14,7 @@
 package io.prestosql.spi.connector;
 
 import io.airlift.slice.Slice;
+import io.prestosql.spi.Page;
 import io.prestosql.spi.PrestoException;
 import io.prestosql.spi.predicate.TupleDomain;
 import io.prestosql.spi.security.GrantInfo;
@@ -626,6 +627,16 @@ public interface ConnectorMetadata
      * </p>
      */
     default Optional<ConstraintApplicationResult<ConnectorTableHandle>> applyFilter(ConnectorSession session, ConnectorTableHandle handle, Constraint constraint)
+    {
+        return Optional.empty();
+    }
+
+    /**
+     * Attempt to materialize the table. Connectors can choose to fully materialize
+     * small tables during planning, which will allow the optimizer to take advantage
+     * of having perfect knowledge of the table data.
+     */
+    default Optional<Page> materializeTable(ConnectorSession session, ConnectorTableHandle handle)
     {
         return Optional.empty();
     }

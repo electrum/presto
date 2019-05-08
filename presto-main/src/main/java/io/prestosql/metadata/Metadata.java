@@ -16,6 +16,7 @@ package io.prestosql.metadata;
 import io.airlift.slice.Slice;
 import io.prestosql.Session;
 import io.prestosql.connector.CatalogName;
+import io.prestosql.spi.Page;
 import io.prestosql.spi.PrestoException;
 import io.prestosql.spi.block.BlockEncodingSerde;
 import io.prestosql.spi.connector.CatalogSchemaName;
@@ -398,4 +399,9 @@ public interface Metadata
     Optional<LimitApplicationResult<TableHandle>> applyLimit(Session session, TableHandle table, long limit);
 
     Optional<ConstraintApplicationResult<TableHandle>> applyFilter(Session session, TableHandle table, Constraint constraint);
+
+    /**
+     * See {@link io.prestosql.spi.connector.ConnectorMetadata#materializeTable}
+     */
+    Optional<Page> materializeTable(Session session, TableHandle table);
 }
