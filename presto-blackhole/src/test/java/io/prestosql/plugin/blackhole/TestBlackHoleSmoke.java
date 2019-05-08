@@ -14,13 +14,22 @@
 package io.prestosql.plugin.blackhole;
 
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import io.airlift.units.Duration;
 import io.prestosql.Session;
+import io.prestosql.execution.warnings.WarningCollector;
 import io.prestosql.metadata.QualifiedObjectName;
+import io.prestosql.spi.type.Type;
+import io.prestosql.sql.planner.LiteralEncoder;
+import io.prestosql.sql.planner.Plan;
+import io.prestosql.sql.planner.assertions.PlanAssert;
+import io.prestosql.sql.planner.assertions.PlanMatchPattern;
+import io.prestosql.sql.tree.Expression;
 import io.prestosql.testing.MaterializedResult;
 import io.prestosql.testing.MaterializedRow;
 import io.prestosql.testing.QueryRunner;
+import io.prestosql.testing.QueryRunner.MaterializedResultWithPlan;
 import org.testng.annotations.AfterTest;
 import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
@@ -30,6 +39,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static io.airlift.slice.Slices.utf8Slice;
 import static io.airlift.testing.Assertions.assertGreaterThan;
 import static io.prestosql.plugin.blackhole.BlackHoleConnector.FIELD_LENGTH_PROPERTY;
 import static io.prestosql.plugin.blackhole.BlackHoleConnector.PAGES_PER_SPLIT_PROPERTY;
@@ -37,8 +47,13 @@ import static io.prestosql.plugin.blackhole.BlackHoleConnector.PAGE_PROCESSING_D
 import static io.prestosql.plugin.blackhole.BlackHoleConnector.ROWS_PER_PAGE_PROPERTY;
 import static io.prestosql.plugin.blackhole.BlackHoleConnector.SPLIT_COUNT_PROPERTY;
 import static io.prestosql.plugin.blackhole.BlackHoleQueryRunner.createQueryRunner;
+import static io.prestosql.spi.type.BigintType.BIGINT;
+import static io.prestosql.spi.type.VarcharType.createVarcharType;
+import static io.prestosql.sql.planner.assertions.PlanMatchPattern.output;
+import static io.prestosql.sql.planner.assertions.PlanMatchPattern.values;
 import static io.prestosql.testing.TestingSession.testSessionBuilder;
 import static java.lang.String.format;
+import static java.util.Collections.nCopies;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.testng.Assert.assertEquals;
@@ -110,6 +125,43 @@ public class TestBlackHoleSmoke
         assertThatQueryReturnsValue("INSERT INTO nation SELECT * FROM tpch.tiny.nation", 25L);
 
         assertThatQueryReturnsValue("SELECT count(*) FROM nation", 0L);
+
+        assertThatQueryReturnsValue("DROP TABLE nation", true);
+    }
+
+    @Test
+    public void testMaterializeTableEmpty()
+    {
+        assertThatQueryReturnsValue("CREATE TABLE nation as SELECT * FROM tpch.tiny.nation", 25L);
+
+        MaterializedResultWithPlan result = executeWithPlan("SELECT * FROM nation");
+        assertEquals(result.getMaterializedResult().getRowCount(), 0);
+        assertPlan(result.getQueryPlan(), output(values("nationkey", "name", "regionkey", "comment")));
+
+        assertThatQueryReturnsValue("DROP TABLE nation", true);
+    }
+
+    @Test
+    public void testMaterializeTableData()
+    {
+        assertThatQueryReturnsValue(
+                format("CREATE TABLE nation WITH ( %s = 3, %s = 1, %s = 1 ) as SELECT * FROM tpch.tiny.nation",
+                        ROWS_PER_PAGE_PROPERTY,
+                        PAGES_PER_SPLIT_PROPERTY,
+                        SPLIT_COUNT_PROPERTY),
+                25L);
+
+        MaterializedResultWithPlan result = executeWithPlan("SELECT * FROM nation");
+        assertEquals(result.getMaterializedResult().getRowCount(), 3);
+        assertPlan(
+                result.getQueryPlan(),
+                output(values(
+                        ImmutableList.of("nationkey", "name", "regionkey", "comment"),
+                        nCopies(3, ImmutableList.of(
+                                encodeLiteral(0, BIGINT),
+                                encodeLiteral(utf8Slice("****************"), createVarcharType(25)),
+                                encodeLiteral(0, BIGINT),
+                                encodeLiteral(utf8Slice("****************"), createVarcharType(152)))))));
 
         assertThatQueryReturnsValue("DROP TABLE nation", true);
     }
@@ -367,5 +419,21 @@ public class TestBlackHoleSmoke
         Object value = materializedRow.getField(0);
         assertEquals(value, expected);
         assertTrue(Iterables.getOnlyElement(rows).getFieldCount() == 1);
+    }
+
+    private MaterializedResultWithPlan executeWithPlan(String sql)
+    {
+        return queryRunner.executeWithPlan(queryRunner.getDefaultSession(), sql, WarningCollector.NOOP);
+    }
+
+    private void assertPlan(Plan plan, PlanMatchPattern pattern)
+    {
+        PlanAssert.assertPlan(queryRunner.getDefaultSession(), queryRunner.getMetadata(), queryRunner.getStatsCalculator(), plan, pattern);
+    }
+
+    private Expression encodeLiteral(Object value, Type type)
+    {
+        LiteralEncoder encoder = new LiteralEncoder(queryRunner.getMetadata().getBlockEncodingSerde());
+        return encoder.toExpression(value, type);
     }
 }

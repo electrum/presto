@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import io.airlift.slice.Slice;
 import io.airlift.units.Duration;
+import io.prestosql.spi.Page;
 import io.prestosql.spi.PrestoException;
 import io.prestosql.spi.connector.ColumnHandle;
 import io.prestosql.spi.connector.ColumnMetadata;
@@ -48,13 +49,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.prestosql.plugin.blackhole.BlackHoleConnector.DISTRIBUTED_ON;
 import static io.prestosql.plugin.blackhole.BlackHoleConnector.FIELD_LENGTH_PROPERTY;
 import static io.prestosql.plugin.blackhole.BlackHoleConnector.PAGES_PER_SPLIT_PROPERTY;
 import static io.prestosql.plugin.blackhole.BlackHoleConnector.PAGE_PROCESSING_DELAY;
 import static io.prestosql.plugin.blackhole.BlackHoleConnector.ROWS_PER_PAGE_PROPERTY;
 import static io.prestosql.plugin.blackhole.BlackHoleConnector.SPLIT_COUNT_PROPERTY;
-import static io.prestosql.plugin.blackhole.BlackHolePageSourceProvider.isNumericType;
 import static io.prestosql.spi.StandardErrorCode.ALREADY_EXISTS;
 import static io.prestosql.spi.StandardErrorCode.INVALID_TABLE_PROPERTY;
 import static java.lang.String.format;
@@ -65,6 +66,8 @@ import static java.util.stream.Collectors.toSet;
 public class BlackHoleMetadata
         implements ConnectorMetadata
 {
+    private static final Page EMPTY_PAGE = new Page(0);
+
     public static final String SCHEMA_NAME = "default";
 
     private final List<String> schemas = new ArrayList<>();
@@ -277,6 +280,22 @@ public class BlackHoleMetadata
     public ConnectorTableProperties getTableProperties(ConnectorSession session, ConnectorTableHandle table)
     {
         return new ConnectorTableProperties();
+    }
+
+    @Override
+    public Optional<Page> materializeTable(ConnectorSession session, ConnectorTableHandle handle)
+    {
+        BlackHoleTableHandle table = (BlackHoleTableHandle) handle;
+        if (table.getSplitCount() == 0) {
+            return Optional.of(EMPTY_PAGE);
+        }
+        if ((table.getSplitCount() == 1) && (table.getPagesPerSplit() == 1) && (table.getRowsPerPage() <= 1000)) {
+            List<Type> types = table.getColumnHandles().stream()
+                    .map(BlackHoleColumnHandle::getColumnType)
+                    .collect(toImmutableList());
+            return Optional.of(generateZeroPage(types, table.getRowsPerPage(), table.getFieldsLength()));
+        }
+        return Optional.empty();
     }
 
     private void checkSchemaExists(String schemaName)

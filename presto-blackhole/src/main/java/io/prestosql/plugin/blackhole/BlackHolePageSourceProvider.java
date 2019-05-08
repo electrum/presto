@@ -85,7 +85,7 @@ public final class BlackHolePageSourceProvider
         return new BlackHolePageSource(page, table.getPagesPerSplit(), executorService, table.getPageProcessingDelay());
     }
 
-    private Page generateZeroPage(List<Type> types, int rowsCount, int fieldLength)
+    public static Page generateZeroPage(List<Type> types, int rowsCount, int fieldLength)
     {
         byte[] constantBytes = new byte[fieldLength];
         Arrays.fill(constantBytes, (byte) 42);
@@ -99,7 +99,7 @@ public final class BlackHolePageSourceProvider
         return new Page(rowsCount, blocks);
     }
 
-    private Block createZeroBlock(Type type, int rowsCount, Slice constantSlice)
+    private static Block createZeroBlock(Type type, int rowsCount, Slice constantSlice)
     {
         checkArgument(isSupportedType(type), "Unsupported type [%s]", type);
 
