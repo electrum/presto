@@ -26,35 +26,35 @@ public class NullInputCharacteristic
 {
     public static NullInputCharacteristic returnsNullOnNullInput()
     {
-        return new NullInputCharacteristic(Optional.empty(), true);
+        return new NullInputCharacteristic(Optional.empty(), false);
     }
 
     public static NullInputCharacteristic returnsNullOnNullInput(NodeLocation location)
     {
-        return new NullInputCharacteristic(Optional.of(location), true);
+        return new NullInputCharacteristic(Optional.of(location), false);
     }
 
     public static NullInputCharacteristic calledOnNullInput()
     {
-        return new NullInputCharacteristic(Optional.empty(), false);
+        return new NullInputCharacteristic(Optional.empty(), true);
     }
 
     public static NullInputCharacteristic calledOnNullInput(NodeLocation location)
     {
-        return new NullInputCharacteristic(Optional.of(location), false);
+        return new NullInputCharacteristic(Optional.of(location), true);
     }
 
-    private final boolean returningNull;
+    private final boolean calledOnNull;
 
-    private NullInputCharacteristic(Optional<NodeLocation> location, boolean returningNull)
+    private NullInputCharacteristic(Optional<NodeLocation> location, boolean calledOnNull)
     {
         super(location);
-        this.returningNull = returningNull;
+        this.calledOnNull = calledOnNull;
     }
 
-    public boolean isReturningNull()
+    public boolean isCalledOnNull()
     {
-        return returningNull;
+        return calledOnNull;
     }
 
     @Override
@@ -79,20 +79,20 @@ public class NullInputCharacteristic
             return false;
         }
         NullInputCharacteristic that = (NullInputCharacteristic) o;
-        return returningNull == that.returningNull;
+        return calledOnNull == that.calledOnNull;
     }
 
     @Override
     public int hashCode()
     {
-        return Objects.hash(returningNull);
+        return Objects.hash(calledOnNull);
     }
 
     @Override
     public String toString()
     {
         return toStringHelper(this)
-                .add("returningNull", returningNull)
+                .add("calledOnNull", calledOnNull)
                 .toString();
     }
 }

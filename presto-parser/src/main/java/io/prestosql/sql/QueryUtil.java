@@ -242,6 +242,7 @@ public final class QueryUtil
     public static Query query(QueryBody body)
     {
         return new Query(
+                ImmutableList.of(),
                 Optional.empty(),
                 body,
                 Optional.empty(),

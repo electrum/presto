@@ -22,47 +22,43 @@ import java.util.Optional;
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
-public class CreateFunction
+public class FunctionSpecification
         extends Statement
 {
     private final QualifiedName name;
     private final List<ParameterDeclaration> parameters;
     private final ReturnClause returnClause;
-    private final RoutineCharacteristics routineCharacteristics;
+    private final List<RoutineCharacteristic> routineCharacteristics;
     private final Statement statement;
-    private final boolean replace;
 
-    public CreateFunction(
+    public FunctionSpecification(
             QualifiedName name,
             List<ParameterDeclaration> parameters,
             ReturnClause returnClause,
-            RoutineCharacteristics routineCharacteristics,
-            Statement statement,
-            boolean replace)
+            List<RoutineCharacteristic> routineCharacteristics,
+            Statement statement)
     {
-        this(Optional.empty(), name, parameters, returnClause, routineCharacteristics, statement, replace);
+        this(Optional.empty(), name, parameters, returnClause, routineCharacteristics, statement);
     }
 
-    public CreateFunction(
+    public FunctionSpecification(
             NodeLocation location,
             QualifiedName name,
             List<ParameterDeclaration> parameters,
             ReturnClause returnClause,
-            RoutineCharacteristics routineCharacteristics,
-            Statement statement,
-            boolean replace)
+            List<RoutineCharacteristic> routineCharacteristics,
+            Statement statement)
     {
-        this(Optional.of(location), name, parameters, returnClause, routineCharacteristics, statement, replace);
+        this(Optional.of(location), name, parameters, returnClause, routineCharacteristics, statement);
     }
 
-    private CreateFunction(
+    private FunctionSpecification(
             Optional<NodeLocation> location,
             QualifiedName name,
             List<ParameterDeclaration> parameters,
             ReturnClause returnClause,
-            RoutineCharacteristics routineCharacteristics,
-            Statement statement,
-            boolean replace)
+            List<RoutineCharacteristic> routineCharacteristics,
+            Statement statement)
     {
         super(location);
         this.name = requireNonNull(name, "name is null");
@@ -70,7 +66,6 @@ public class CreateFunction
         this.returnClause = requireNonNull(returnClause, "returnClause is null");
         this.routineCharacteristics = requireNonNull(routineCharacteristics, "routineCharacteristics is null");
         this.statement = requireNonNull(statement, "statement is null");
-        this.replace = replace;
     }
 
     public QualifiedName getName()
@@ -88,7 +83,7 @@ public class CreateFunction
         return returnClause;
     }
 
-    public RoutineCharacteristics getRoutineCharacteristics()
+    public List<RoutineCharacteristic> getRoutineCharacteristics()
     {
         return routineCharacteristics;
     }
@@ -98,18 +93,13 @@ public class CreateFunction
         return statement;
     }
 
-    public boolean isReplace()
-    {
-        return replace;
-    }
-
     @Override
     public List<Node> getChildren()
     {
         return ImmutableList.<Node>builder()
                 .addAll(parameters)
                 .add(returnClause)
-                .add(routineCharacteristics)
+                .addAll(routineCharacteristics)
                 .add(statement)
                 .build();
     }
@@ -117,7 +107,7 @@ public class CreateFunction
     @Override
     public <R, C> R accept(AstVisitor<R, C> visitor, C context)
     {
-        return visitor.visitCreateFunction(this, context);
+        return visitor.visitFunctionSpecification(this, context);
     }
 
     @Override
@@ -129,9 +119,8 @@ public class CreateFunction
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        CreateFunction that = (CreateFunction) o;
-        return replace == that.replace &&
-                Objects.equals(name, that.name) &&
+        FunctionSpecification that = (FunctionSpecification) o;
+        return Objects.equals(name, that.name) &&
                 Objects.equals(parameters, that.parameters) &&
                 Objects.equals(returnClause, that.returnClause) &&
                 Objects.equals(routineCharacteristics, that.routineCharacteristics) &&
@@ -141,7 +130,7 @@ public class CreateFunction
     @Override
     public int hashCode()
     {
-        return Objects.hash(name, parameters, returnClause, routineCharacteristics, statement, replace);
+        return Objects.hash(name, parameters, returnClause, routineCharacteristics, statement);
     }
 
     @Override
@@ -153,7 +142,6 @@ public class CreateFunction
                 .add("returnClause", returnClause)
                 .add("routineCharacteristics", routineCharacteristics)
                 .add("statement", statement)
-                .add("replace", replace)
                 .toString();
     }
 }

@@ -40,10 +40,10 @@ import io.prestosql.sql.tree.AstVisitor;
 import io.prestosql.sql.tree.CaseStatement;
 import io.prestosql.sql.tree.CaseStatementWhenClause;
 import io.prestosql.sql.tree.CompoundStatement;
-import io.prestosql.sql.tree.CreateFunction;
 import io.prestosql.sql.tree.ElseIfClause;
 import io.prestosql.sql.tree.Expression;
 import io.prestosql.sql.tree.FunctionCall;
+import io.prestosql.sql.tree.FunctionSpecification;
 import io.prestosql.sql.tree.IfStatement;
 import io.prestosql.sql.tree.IterateStatement;
 import io.prestosql.sql.tree.LeaveStatement;
@@ -98,7 +98,7 @@ public class SqlRoutinePlanner
         this.resolution = new StandardFunctionResolution(metadata);
     }
 
-    public SqlRoutine planSqlFunction(CreateFunction function, SqlRoutineAnalysis analysis)
+    public SqlRoutine planSqlFunction(FunctionSpecification function, SqlRoutineAnalysis analysis)
     {
         List<SqlVariable> allVariables = new ArrayList<>();
         Map<String, SqlVariable> scopeVariables = new HashMap<>();

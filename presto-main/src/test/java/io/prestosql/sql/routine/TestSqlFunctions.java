@@ -26,8 +26,9 @@ import io.prestosql.spi.type.Type;
 import io.prestosql.sql.analyzer.TypeSignatureProvider;
 import io.prestosql.sql.parser.ParsingOptions;
 import io.prestosql.sql.parser.SqlParser;
-import io.prestosql.sql.tree.CreateFunction;
+import io.prestosql.sql.tree.FunctionSpecification;
 import io.prestosql.sql.tree.QualifiedName;
+import io.prestosql.sql.tree.Query;
 import io.prestosql.sql.tree.Statement;
 import org.intellij.lang.annotations.Language;
 import org.testng.annotations.Test;
@@ -35,6 +36,7 @@ import org.testng.annotations.Test;
 import java.lang.invoke.MethodHandle;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.airlift.testing.Assertions.assertInstanceOf;
 import static io.prestosql.metadata.FunctionKind.SCALAR;
@@ -62,9 +64,10 @@ public class TestSqlFunctions
     {
         Signature signature = new Signature("answer", SCALAR, BIGINT.getTypeSignature());
         MethodHandle handle = compileFunction(signature, "" +
-                "CREATE FUNCTION answer()\n" +
+                "WITH FUNCTION answer()\n" +
                 "RETURNS BIGINT\n" +
-                "RETURN 42");
+                "RETURN 42\n" +
+                "SELECT answer()\n");
 
         assertEquals(handle.invoke(SESSION), 42L);
     }
@@ -75,9 +78,10 @@ public class TestSqlFunctions
     {
         Signature signature = new Signature("hello", SCALAR, VARCHAR.getTypeSignature(), VARCHAR.getTypeSignature());
         MethodHandle handle = compileFunction(signature, "" +
-                "CREATE FUNCTION hello(s VARCHAR)\n" +
+                "WITH FUNCTION hello(s VARCHAR)\n" +
                 "RETURNS VARCHAR\n" +
-                "RETURN 'Hello, ' || s || '!'");
+                "RETURN 'Hello, ' || s || '!'\n" +
+                "SELECT hello('test')");
 
         assertEquals(handle.invoke(SESSION, utf8Slice("world")), utf8Slice("Hello, world!"));
         assertEquals(handle.invoke(SESSION, utf8Slice("WORLD")), utf8Slice("Hello, WORLD!"));
@@ -91,12 +95,13 @@ public class TestSqlFunctions
     {
         Signature signature = new Signature("test", SCALAR, BIGINT.getTypeSignature(), BIGINT.getTypeSignature());
         MethodHandle handle = compileFunction(signature, "" +
-                "CREATE FUNCTION test(a bigint)\n" +
+                "WITH FUNCTION test(a bigint)\n" +
                 "RETURNS bigint\n" +
                 "BEGIN\n" +
                 "  DECLARE x bigint DEFAULT cast(99 as bigint);\n" +
                 "  RETURN x * a;\n" +
-                "END");
+                "END\n" +
+                "SELECT test(42)");
 
         assertEquals(handle.invoke(SESSION, 0L), 0L);
         assertEquals(handle.invoke(SESSION, 1L), 99L);
@@ -110,7 +115,7 @@ public class TestSqlFunctions
     {
         Signature signature = new Signature("simple_case", SCALAR, VARCHAR.getTypeSignature(), BIGINT.getTypeSignature());
         MethodHandle handle = compileFunction(signature, ("" +
-                "CREATE FUNCTION simple_case(a bigint)\n" +
+                "WITH FUNCTION simple_case(a bigint)\n" +
                 "RETURNS varchar\n" +
                 "BEGIN\n" +
                 "  CASE a\n" +
@@ -120,7 +125,8 @@ public class TestSqlFunctions
                 "    WHEN 20.0E0 THEN RETURN 'twenty';\n" +
                 "    ELSE RETURN 'other';\n" +
                 "  END CASE;\n" +
-                "END"));
+                "END\n" +
+                "SELECT simple_case(42)"));
 
         assertEquals(handle.invoke(SESSION, 0L), utf8Slice("zero"));
         assertEquals(handle.invoke(SESSION, 1L), utf8Slice("one"));
@@ -135,7 +141,7 @@ public class TestSqlFunctions
     {
         Signature signature = new Signature("search_case", SCALAR, VARCHAR.getTypeSignature(), BIGINT.getTypeSignature(), BIGINT.getTypeSignature());
         MethodHandle handle = compileFunction(signature, "" +
-                "CREATE FUNCTION search_case(a bigint, b bigint)\n" +
+                "WITH FUNCTION search_case(a bigint, b bigint)\n" +
                 "RETURNS varchar\n" +
                 "BEGIN\n" +
                 "  CASE\n" +
@@ -145,7 +151,8 @@ public class TestSqlFunctions
                 "    WHEN b = 20.0E0 THEN RETURN 'twenty';\n" +
                 "    ELSE RETURN 'other';\n" +
                 "  END CASE;\n" +
-                "END");
+                "END\n" +
+                "SELECT searched_case(42, 42)");
 
         assertEquals(handle.invoke(SESSION, 0L, 42L), utf8Slice("zero"));
         assertEquals(handle.invoke(SESSION, 42L, 1L), utf8Slice("one"));
@@ -166,7 +173,7 @@ public class TestSqlFunctions
     {
         Signature signature = new Signature("fib", SCALAR, BIGINT.getTypeSignature(), BIGINT.getTypeSignature());
         MethodHandle handle = compileFunction(signature, "" +
-                "CREATE FUNCTION fib(n bigint)\n" +
+                "WITH FUNCTION fib(n bigint)\n" +
                 "RETURNS bigint\n" +
                 "BEGIN\n" +
                 "  DECLARE a bigint DEFAULT 1;\n" +
@@ -182,7 +189,8 @@ public class TestSqlFunctions
                 "    SET b = c;\n" +
                 "  END WHILE;\n" +
                 "  RETURN c;\n" +
-                "END");
+                "END\n" +
+                "SELECT fib(8)");
 
         assertEquals(handle.invoke(SESSION, 1L), 1L);
         assertEquals(handle.invoke(SESSION, 2L), 1L);
@@ -200,7 +208,7 @@ public class TestSqlFunctions
     {
         Signature signature = new Signature("test", SCALAR, BIGINT.getTypeSignature());
         MethodHandle handle = compileFunction(signature, "" +
-                "CREATE FUNCTION test()\n" +
+                "WITH FUNCTION test()\n" +
                 "RETURNS bigint\n" +
                 "BEGIN\n" +
                 "  DECLARE a int DEFAULT 0;\n" +
@@ -216,7 +224,8 @@ public class TestSqlFunctions
                 "    END IF;\n" +
                 "  END WHILE;\n" +
                 "  RETURN b;\n" +
-                "END");
+                "END\n" +
+                "SELECT test()");
 
         assertEquals(handle.invoke(SESSION), 5L);
     }
@@ -227,21 +236,22 @@ public class TestSqlFunctions
     {
         Signature signature = new Signature("test_repeat", SCALAR, BIGINT.getTypeSignature(), BIGINT.getTypeSignature());
         MethodHandle handle = compileFunction(signature, "" +
-                "CREATE FUNCTION test_repeat(a bigint)\n" +
+                "WITH FUNCTION test_repeat(a bigint)\n" +
                 "RETURNS bigint\n" +
                 "BEGIN\n" +
                 "  top: REPEAT\n" +
                 "    SET a = a + 1;\n" +
                 "  UNTIL a < 10 END REPEAT;\n" +
                 "  RETURN a;\n" +
-                "END");
+                "END\n" +
+                "SELECT test_repeat(42)");
 
         assertEquals(handle.invoke(SESSION, 0L), 10L);
         assertEquals(handle.invoke(SESSION, 100L), 101L);
 
         signature = new Signature("test_repeat_continue", SCALAR, BIGINT.getTypeSignature());
         handle = compileFunction(signature, "" +
-                "CREATE FUNCTION test_repeat_continue()\n" +
+                "WITH FUNCTION test_repeat_continue()\n" +
                 "RETURNS bigint\n" +
                 "BEGIN\n" +
                 "  DECLARE a int DEFAULT 0;\n" +
@@ -254,7 +264,8 @@ public class TestSqlFunctions
                 "    SET b = b + 1;\n" +
                 "  UNTIL a < 10 END REPEAT;\n" +
                 "  RETURN b;\n" +
-                "END");
+                "END\n" + "" +
+                "SELECT test_repeat_continue()");
 
         assertEquals(handle.invoke(SESSION), 7L);
     }
@@ -310,7 +321,7 @@ public class TestSqlFunctions
     {
         String name = "test" + nextId.incrementAndGet();
         @Language("SQL") String sql = format(
-                "CREATE FUNCTION %s(p %s)\nRETURNS %s\nRETURN %s",
+                "WITH FUNCTION %s(p %s)\nRETURNS %s\nRETURN %s\nSELECT NULL",
                 name,
                 inputType.getTypeSignature(),
                 outputType.getTypeSignature(),
@@ -326,10 +337,11 @@ public class TestSqlFunctions
             throws Throwable
     {
         Statement statement = SQL_PARSER.createStatement(sql, new ParsingOptions(AS_DECIMAL));
-        assertInstanceOf(statement, CreateFunction.class);
+        assertInstanceOf(statement, Query.class);
+        FunctionSpecification specification = getOnlyElement(((Query) statement).getFunctions());
 
         SqlFunctionCompiler compiler = new SqlFunctionCompiler(METADATA, WarningCollector.NOOP, TEST_SESSION);
-        SqlFunction sqlFunction = compiler.compileScalarFunction((CreateFunction) statement);
+        SqlFunction sqlFunction = compiler.compileScalarFunction(specification);
         METADATA.addFunctions(ImmutableList.of(sqlFunction));
 
         ResolvedFunction resolvedFunction = METADATA.resolveFunction(

@@ -1435,6 +1435,7 @@ public class TestSqlParser
         QualifiedName table = QualifiedName.of("foo");
 
         Query query = new Query(
+                ImmutableList.of(),
                 Optional.of(new With(false, ImmutableList.of(
                         new WithQuery(
                                 identifier("t"),
@@ -1717,6 +1718,7 @@ public class TestSqlParser
     {
         assertStatement("WITH a (t, u) AS (SELECT * FROM x), b AS (SELECT * FROM y) TABLE z",
                 new Query(
+                        ImmutableList.of(),
                         Optional.of(new With(false, ImmutableList.of(
                                 new WithQuery(
                                         identifier("a"),
@@ -1737,6 +1739,7 @@ public class TestSqlParser
 
         assertStatement("WITH RECURSIVE a AS (SELECT * FROM x) TABLE y",
                 new Query(
+                        ImmutableList.of(),
                         Optional.of(new With(true, ImmutableList.of(
                                 new WithQuery(
                                         identifier("a"),
@@ -2472,7 +2475,7 @@ public class TestSqlParser
         return QualifiedName.of(parts);
     }
 
-    private static void assertStatement(String query, Statement expected)
+    public static void assertStatement(String query, Statement expected)
     {
         assertParsed(query, expected, SQL_PARSER.createStatement(query, new ParsingOptions()));
         assertFormattedSql(SQL_PARSER, expected);

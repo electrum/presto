@@ -722,14 +722,9 @@ public abstract class AstVisitor<R, C>
         return visitNode(node, context);
     }
 
-    protected R visitCreateFunction(CreateFunction node, C context)
+    protected R visitFunctionSpecification(FunctionSpecification node, C context)
     {
         return visitNode(node, context);
-    }
-
-    protected R visitDropFunction(DropFunction node, C context)
-    {
-        return visitStatement(node, context);
     }
 
     protected R visitParameterDeclaration(ParameterDeclaration node, C context)
@@ -742,32 +737,7 @@ public abstract class AstVisitor<R, C>
         return visitNode(node, context);
     }
 
-    protected R visitRoutineCharacteristics(RoutineCharacteristics node, C context)
-    {
-        return visitNode(node, context);
-    }
-
-    protected R visitSpecificCharacteristic(SpecificCharacteristic node, C context)
-    {
-        return visitNode(node, context);
-    }
-
-    protected R visitDeterministicCharacteristic(DeterministicCharacteristic node, C context)
-    {
-        return visitNode(node, context);
-    }
-
-    protected R visitSqlDataAccessCharacteristic(SqlDataAccessCharacteristic node, C context)
-    {
-        return visitNode(node, context);
-    }
-
     protected R visitNullInputCharacteristic(NullInputCharacteristic node, C context)
-    {
-        return visitNode(node, context);
-    }
-
-    protected R visitReturnedResultSetsCharacteristic(ReturnedResultSetsCharacteristic node, C context)
     {
         return visitNode(node, context);
     }

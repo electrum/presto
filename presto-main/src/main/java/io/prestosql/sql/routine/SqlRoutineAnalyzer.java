@@ -17,6 +17,7 @@ import com.google.common.collect.ImmutableMap;
 import io.prestosql.Session;
 import io.prestosql.execution.warnings.WarningCollector;
 import io.prestosql.metadata.Metadata;
+import io.prestosql.metadata.ResolvedFunction;
 import io.prestosql.spi.type.Type;
 import io.prestosql.spi.type.TypeNotFoundException;
 import io.prestosql.sql.analyzer.ExpressionAnalyzer;
@@ -29,21 +30,21 @@ import io.prestosql.sql.tree.AstVisitor;
 import io.prestosql.sql.tree.CaseStatement;
 import io.prestosql.sql.tree.CaseStatementWhenClause;
 import io.prestosql.sql.tree.CompoundStatement;
-import io.prestosql.sql.tree.CreateFunction;
 import io.prestosql.sql.tree.DataType;
 import io.prestosql.sql.tree.ElseClause;
 import io.prestosql.sql.tree.ElseIfClause;
 import io.prestosql.sql.tree.Expression;
+import io.prestosql.sql.tree.FunctionSpecification;
 import io.prestosql.sql.tree.IfStatement;
 import io.prestosql.sql.tree.IterateStatement;
 import io.prestosql.sql.tree.LeaveStatement;
 import io.prestosql.sql.tree.Node;
 import io.prestosql.sql.tree.NodeRef;
+import io.prestosql.sql.tree.NullInputCharacteristic;
 import io.prestosql.sql.tree.ParameterDeclaration;
 import io.prestosql.sql.tree.RepeatStatement;
 import io.prestosql.sql.tree.ReturnClause;
 import io.prestosql.sql.tree.ReturnStatement;
-import io.prestosql.sql.tree.RoutineCharacteristics;
 import io.prestosql.sql.tree.VariableDeclaration;
 import io.prestosql.sql.tree.WhileStatement;
 import io.prestosql.type.TypeCoercion;
@@ -57,17 +58,20 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.prestosql.spi.StandardErrorCode.ALREADY_EXISTS;
 import static io.prestosql.spi.StandardErrorCode.INVALID_ARGUMENTS;
 import static io.prestosql.spi.StandardErrorCode.NOT_FOUND;
 import static io.prestosql.spi.StandardErrorCode.NOT_SUPPORTED;
+import static io.prestosql.spi.StandardErrorCode.SYNTAX_ERROR;
 import static io.prestosql.spi.StandardErrorCode.TYPE_MISMATCH;
 import static io.prestosql.spi.type.BooleanType.BOOLEAN;
 import static io.prestosql.sql.analyzer.SemanticExceptions.notSupportedException;
 import static io.prestosql.sql.analyzer.SemanticExceptions.semanticException;
 import static io.prestosql.sql.analyzer.TypeSignatureTranslator.toTypeSignature;
+import static io.prestosql.sql.planner.DeterminismEvaluator.isDeterministic;
 import static java.lang.String.format;
 import static java.util.Locale.ENGLISH;
 import static java.util.Objects.requireNonNull;
@@ -85,20 +89,14 @@ public class SqlRoutineAnalyzer
         this.session = requireNonNull(session, "session is null");
     }
 
-    public SqlRoutineAnalysis analyze(CreateFunction function)
+    public SqlRoutineAnalysis analyze(FunctionSpecification function)
     {
         if (function.getName().getPrefix().isPresent()) {
             throw notSupportedException(function, "Qualified function names not yet supported");
         }
         String functionName = function.getName().getSuffix();
 
-        RoutineCharacteristics routineCharacteristics = function.getRoutineCharacteristics();
-        if (routineCharacteristics.getDynamicResultSets().isPresent()) {
-            throw semanticException(NOT_SUPPORTED, function, "DYNAMIC RESULT SETS not allowed for CREATE FUNCTION");
-        }
-        if (!routineCharacteristics.getSpecificCharacteristics().isEmpty()) {
-            throw semanticException(NOT_SUPPORTED, function, "SPECIFIC not yet supported");
-        }
+        boolean calledOnNull = isCalledOnNull(function);
 
         ReturnClause returnClause = function.getReturnClause();
         if (returnClause.getCastFromType().isPresent()) {
@@ -130,6 +128,8 @@ public class SqlRoutineAnalyzer
                 functionName,
                 arguments,
                 returnType,
+                calledOnNull,
+                visitor.isDeterminstic(),
                 visitor.getTypes(),
                 visitor.getCoercions(),
                 visitor.getTypeOnlyCoercions());
@@ -145,6 +145,23 @@ public class SqlRoutineAnalyzer
         }
     }
 
+    private static boolean isCalledOnNull(FunctionSpecification function)
+    {
+        List<NullInputCharacteristic> nullInput = function.getRoutineCharacteristics().stream()
+                .filter(NullInputCharacteristic.class::isInstance)
+                .map(NullInputCharacteristic.class::cast)
+                .collect(toImmutableList());
+
+        if (nullInput.size() > 1) {
+            throw semanticException(SYNTAX_ERROR, function, "Multiple null-call clauses specified");
+        }
+
+        return nullInput.stream()
+                .map(NullInputCharacteristic::isCalledOnNull)
+                .findAny()
+                .orElse(true);
+    }
+
     private class StatementVisitor
             extends AstVisitor<Void, Void>
     {
@@ -157,6 +174,8 @@ public class SqlRoutineAnalyzer
         private final Set<NodeRef<Expression>> typeOnlyCoercions = new LinkedHashSet<>();
 
         private final TypeCoercion typeCoercion = new TypeCoercion(metadata::getType);
+
+        private boolean determinstic = true;
 
         public StatementVisitor(Type returnType, Map<String, Type> scopeVariables)
         {
@@ -177,6 +196,11 @@ public class SqlRoutineAnalyzer
         public Set<NodeRef<Expression>> getTypeOnlyCoercions()
         {
             return typeOnlyCoercions;
+        }
+
+        public boolean isDeterminstic()
+        {
+            return determinstic;
         }
 
         @Override
@@ -370,6 +394,12 @@ public class SqlRoutineAnalyzer
 
             addTypes(analyzer.getExpressionTypes());
             addCoercions(analyzer.getExpressionCoercions(), analyzer.getTypeOnlyCoercions());
+
+            determinstic |= isDeterministic(expression, functionCall -> {
+                ResolvedFunction resolvedFunction = analyzer.getResolvedFunctions().get(NodeRef.of(functionCall));
+                checkArgument(resolvedFunction != null, "function call is not resolved: %s", functionCall);
+                return metadata.getFunctionMetadata(resolvedFunction);
+            });
 
             return analyzer.getExpressionTypes().get(NodeRef.of(expression));
         }

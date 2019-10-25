@@ -28,8 +28,10 @@ import static java.util.Objects.requireNonNull;
 public class SqlRoutineAnalysis
 {
     private final String name;
-    private final Type returnType;
     private final Map<String, Type> arguments;
+    private final Type returnType;
+    private final boolean calledOnNull;
+    private final boolean determinstic;
     private final Map<NodeRef<Expression>, Type> types;
     private final Map<NodeRef<Expression>, Type> coercions;
     private final Set<NodeRef<Expression>> typeOnlyCoercions;
@@ -38,6 +40,8 @@ public class SqlRoutineAnalysis
             String name,
             Map<String, Type> arguments,
             Type returnType,
+            boolean calledOnNull,
+            boolean determinstic,
             Map<NodeRef<Expression>, Type> types,
             Map<NodeRef<Expression>, Type> coercions,
             Set<NodeRef<Expression>> typeOnlyCoercions)
@@ -45,6 +49,8 @@ public class SqlRoutineAnalysis
         this.name = requireNonNull(name, "name is null");
         this.arguments = ImmutableMap.copyOf(requireNonNull(arguments, "arguments is null"));
         this.returnType = requireNonNull(returnType, "returnType is null");
+        this.calledOnNull = calledOnNull;
+        this.determinstic = determinstic;
         this.types = ImmutableMap.copyOf(requireNonNull(types, "types is null"));
         this.coercions = ImmutableMap.copyOf(requireNonNull(coercions, "coercions is null"));
         this.typeOnlyCoercions = ImmutableSet.copyOf(requireNonNull(typeOnlyCoercions, "typeOnlyCoercions is null"));
@@ -63,6 +69,16 @@ public class SqlRoutineAnalysis
     public Type getReturnType()
     {
         return returnType;
+    }
+
+    public boolean isCalledOnNull()
+    {
+        return calledOnNull;
+    }
+
+    public boolean isDeterminstic()
+    {
+        return determinstic;
     }
 
     public Map<NodeRef<Expression>, Type> getTypes()
@@ -87,6 +103,8 @@ public class SqlRoutineAnalysis
                 .add("name", name)
                 .add("arguments", arguments)
                 .add("returnType", returnType)
+                .add("calledOnNull", calledOnNull)
+                .add("determinstic", determinstic)
                 .toString();
     }
 }

@@ -25,7 +25,7 @@ import io.prestosql.metadata.SqlScalarFunction;
 import io.prestosql.operator.scalar.ScalarFunctionImplementation;
 import io.prestosql.operator.scalar.ScalarFunctionImplementation.ArgumentProperty;
 import io.prestosql.spi.type.Type;
-import io.prestosql.sql.tree.CreateFunction;
+import io.prestosql.sql.tree.FunctionSpecification;
 import io.prestosql.util.Reflection;
 
 import java.lang.invoke.MethodHandle;
@@ -55,7 +55,7 @@ public class SqlFunctionCompiler
         this.session = requireNonNull(session, "session is null");
     }
 
-    public SqlFunction compileScalarFunction(CreateFunction function)
+    public SqlFunction compileScalarFunction(FunctionSpecification function)
     {
         SqlRoutineAnalyzer analyzer = new SqlRoutineAnalyzer(metadata, warningCollector, session);
         SqlRoutineAnalysis analysis = analyzer.analyze(function);
@@ -74,10 +74,8 @@ public class SqlFunctionCompiler
                 analysis.getArguments().values().stream()
                         .map(Type::getTypeSignature)
                         .collect(toImmutableList()));
-        boolean deterministic = function.getRoutineCharacteristics().isDeterministic().orElse(true);
-        boolean returnsNullOnNullInput = function.getRoutineCharacteristics().isReturnsNullOnNullInput().orElse(true);
 
-        return new CompiledSqlScalarFunction(signature, method, returnsNullOnNullInput, deterministic);
+        return new CompiledSqlScalarFunction(signature, method, analysis.isCalledOnNull(), analysis.isDeterminstic());
     }
 
     private static MethodHandle getConstructor(Class<?> clazz)
@@ -97,20 +95,20 @@ public class SqlFunctionCompiler
             extends SqlScalarFunction
     {
         private final MethodHandleAndConstructor method;
-        private final boolean returnsNullOnNullInput;
+        private final boolean calledOnNull;
         private final List<ArgumentProperty> argumentProperties;
 
         public CompiledSqlScalarFunction(
                 Signature signature,
                 MethodHandleAndConstructor method,
-                boolean returnsNullOnNullInput,
+                boolean calledOnNull,
                 boolean deterministic)
         {
             super(new FunctionMetadata(signature, false, deterministic, ""));
             this.method = requireNonNull(method, "method is null");
-            this.returnsNullOnNullInput = returnsNullOnNullInput;
+            this.calledOnNull = calledOnNull;
 
-            ArgumentProperty argumentProperty = valueTypeArgumentProperty(returnsNullOnNullInput ? RETURN_NULL_ON_NULL : USE_BOXED_TYPE);
+            ArgumentProperty argumentProperty = valueTypeArgumentProperty(calledOnNull ? USE_BOXED_TYPE : RETURN_NULL_ON_NULL);
             argumentProperties = nCopies(signature.getArgumentTypes().size(), argumentProperty);
         }
 
@@ -118,7 +116,7 @@ public class SqlFunctionCompiler
         public ScalarFunctionImplementation specialize(BoundVariables boundVariables, int arity, Metadata metadata)
         {
             return new ScalarFunctionImplementation(
-                    returnsNullOnNullInput,
+                    calledOnNull,
                     argumentProperties,
                     method.getMethodHandle(),
                     Optional.of(method.getConstructor()));

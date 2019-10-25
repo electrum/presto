@@ -119,14 +119,14 @@ statement
     | DESCRIBE INPUT identifier                                        #describeInput
     | DESCRIBE OUTPUT identifier                                       #describeOutput
     | SET PATH pathSpecification                                       #setPath
-    | CREATE (OR REPLACE)? FUNCTION qualifiedName
-        parameterDeclarationList returnsClause routineCharacteristic*
-        routineStatement                                               #createFunction
-    | DROP FUNCTION (IF EXISTS)? qualifiedName                         #dropFunction
     ;
 
 query
-    :  with? queryNoWith
+    : withFunction? with? queryNoWith
+    ;
+
+withFunction
+    : WITH functionSpecification (',' functionSpecification)*
     ;
 
 with
@@ -462,6 +462,12 @@ pathSpecification
     : pathElement (',' pathElement)*
     ;
 
+functionSpecification
+    : FUNCTION qualifiedName parameterDeclarationList
+        returnsClause routineCharacteristic*
+        (returnStatement | compoundStatement)
+    ;
+
 parameterDeclarationList
     : '(' (parameterDeclaration (',' parameterDeclaration)*)? ')'
     ;
@@ -479,24 +485,11 @@ returnsClause
     ;
 
 routineCharacteristic
-    : SPECIFIC value=qualifiedName             #specificCharacteristic
-    | DETERMINISTIC                            #isDeterministicCharacteristic
-    | NOT DETERMINISTIC                        #isNotDeterministicCharacteristic
-    | NO SQL                                   #noSqlAccessCharacteristic
-    | CONTAINS SQL                             #containsSqlAccessCharacteristic
-    | READS SQL DATA                           #readsSqlDataAccessCharacteristic
-    | MODIFIES SQL DATA                        #modifiesSqlDataAccessCharacteristic
-    | RETURNS NULL ON NULL INPUT               #returnsNullOnNullInputCharacteristic
-    | CALLED ON NULL INPUT                     #calledOnNullInputCharacteristic
-    | DYNAMIC RESULT SETS value=INTEGER_VALUE  #returnedResultSetsCharacteristic
+    : RETURNS NULL ON NULL INPUT        #returnsNullOnNullInputCharacteristic
+    | CALLED ON NULL INPUT              #calledOnNullInputCharacteristic
     ;
 
 routineStatement
-    : controlStatement
-    | statement
-    ;
-
-controlStatement
     : callStatement
     | returnStatement
     | variableDeclaration
@@ -632,8 +625,8 @@ nonReserved
     // IMPORTANT: this rule must only contain tokens. Nested rules are not supported. See SqlParser.exitNonReserved
     : ADD | ADMIN | ALL | ANALYZE | ANY | ARRAY | ASC | AT
     | BEGIN | BERNOULLI
-    | CALL | CALLED | CASCADE | CATALOGS | COLUMN | COLUMNS | COMMENT | COMMIT | COMMITTED | CONTAINS | CURRENT
-    | DATA | DATE | DAY | DECLARE | DEFINER | DEFAULT | DESC | DETERMINISTIC | DISTRIBUTED | DO | DOUBLE | DYNAMIC
+    | CALL | CALLED | CASCADE | CATALOGS | COLUMN | COLUMNS | COMMENT | COMMIT | COMMITTED | CURRENT
+    | DATA | DATE | DAY | DECLARE | DEFINER | DEFAULT | DESC | DISTRIBUTED | DO | DOUBLE
     | ELSEIF | EXCLUDING | EXPLAIN
     | FETCH | FILTER | FIRST | FOLLOWING | FORMAT | FUNCTION | FUNCTIONS
     | GRANT | GRANTED | GRANTS | GRAPHVIZ
@@ -641,14 +634,14 @@ nonReserved
     | IF | IGNORE | INCLUDING | INOUT | INPUT | INTERVAL | INVOKER | IO | ITERATE | ISOLATION
     | JSON
     | LAST | LATERAL | LEAVE | LEVEL | LIMIT | LOGICAL | LOOP
-    | MAP | MINUTE | MODIFIES | MONTH
+    | MAP | MINUTE | MONTH
     | NEXT | NFC | NFD | NFKC | NFKD | NO | NONE | NULLIF | NULLS
     | OFFSET | ONLY | OUT | OPTION | ORDINALITY | OUTPUT | OVER
     | PARTITION | PARTITIONS | PATH | POSITION | PRECEDING | PRECISION | PRIVILEGES | PROPERTIES
-    | RANGE | READ | READS | RENAME | REPEATABLE | REPLACE | RESET | RESPECT | RESTRICT | RESULT
+    | RANGE | READ | RENAME | REPEATABLE | REPLACE | RESET | RESPECT | RESTRICT
     | REPEAT | RETURN | RETURNS | REVOKE | ROLE | ROLES | ROLLBACK | ROW | ROWS
     | SCHEMA | SCHEMAS | SECOND | SECURITY | SERIALIZABLE | SESSION | SET | SETS
-    | SHOW | SOME | SPECIFIC | SQL | START | STATS | SUBSTRING | SYSTEM
+    | SHOW | SOME | START | STATS | SUBSTRING | SYSTEM
     | TABLES | TABLESAMPLE | TEXT | TIES | TIME | TIMESTAMP | TO | TRANSACTION | TRY_CAST | TYPE
     | UNBOUNDED | UNCOMMITTED | UNTIL | USE | USER
     | VALIDATE | VERBOSE | VIEW
@@ -684,7 +677,6 @@ COMMENT: 'COMMENT';
 COMMIT: 'COMMIT';
 COMMITTED: 'COMMITTED';
 CONSTRAINT: 'CONSTRAINT';
-CONTAINS: 'CONTAINS';
 CREATE: 'CREATE';
 CROSS: 'CROSS';
 CUBE: 'CUBE';
@@ -705,13 +697,11 @@ DEFINER: 'DEFINER';
 DELETE: 'DELETE';
 DESC: 'DESC';
 DESCRIBE: 'DESCRIBE';
-DETERMINISTIC: 'DETERMINISTIC';
 DISTINCT: 'DISTINCT';
 DISTRIBUTED: 'DISTRIBUTED';
 DO: 'DO';
 DOUBLE: 'DOUBLE';
 DROP: 'DROP';
-DYNAMIC: 'DYNAMIC';
 ELSE: 'ELSE';
 ELSEIF: 'ELSEIF';
 END: 'END';
@@ -772,7 +762,6 @@ LOGICAL: 'LOGICAL';
 LOOP: 'LOOP';
 MAP: 'MAP';
 MINUTE: 'MINUTE';
-MODIFIES: 'MODIFIES';
 MONTH: 'MONTH';
 NATURAL: 'NATURAL';
 NEXT: 'NEXT';
@@ -809,7 +798,6 @@ PRIVILEGES: 'PRIVILEGES';
 PROPERTIES: 'PROPERTIES';
 RANGE: 'RANGE';
 READ: 'READ';
-READS: 'READS';
 RECURSIVE: 'RECURSIVE';
 RENAME: 'RENAME';
 REPEAT: 'REPEAT';
@@ -818,7 +806,6 @@ REPLACE: 'REPLACE';
 RESET: 'RESET';
 RESPECT: 'RESPECT';
 RESTRICT: 'RESTRICT';
-RESULT: 'RESULT';
 RETURN: 'RETURN';
 RETURNS: 'RETURNS';
 REVOKE: 'REVOKE';
@@ -840,8 +827,6 @@ SET: 'SET';
 SETS: 'SETS';
 SHOW: 'SHOW';
 SOME: 'SOME';
-SPECIFIC: 'SPECIFIC';
-SQL: 'SQL';
 START: 'START';
 STATS: 'STATS';
 SUBSTRING: 'SUBSTRING';

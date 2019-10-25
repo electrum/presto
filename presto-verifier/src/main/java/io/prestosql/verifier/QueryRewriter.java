@@ -207,10 +207,10 @@ public class QueryRewriter
                     querySpecification.getOffset(),
                     Optional.of(new Limit("0")));
 
-            zeroRowsQuery = new io.prestosql.sql.tree.Query(createSelectClause.getWith(), innerQuery, Optional.empty(), Optional.empty(), Optional.empty());
+            zeroRowsQuery = new io.prestosql.sql.tree.Query(ImmutableList.of(), createSelectClause.getWith(), innerQuery, Optional.empty(), Optional.empty(), Optional.empty());
         }
         else {
-            zeroRowsQuery = new io.prestosql.sql.tree.Query(createSelectClause.getWith(), innerQuery, Optional.empty(), Optional.empty(), Optional.of(new Limit("0")));
+            zeroRowsQuery = new io.prestosql.sql.tree.Query(ImmutableList.of(), createSelectClause.getWith(), innerQuery, Optional.empty(), Optional.empty(), Optional.of(new Limit("0")));
         }
 
         ImmutableList.Builder<Column> columns = ImmutableList.builder();

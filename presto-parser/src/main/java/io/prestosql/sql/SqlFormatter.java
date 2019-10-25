@@ -30,7 +30,6 @@ import io.prestosql.sql.tree.ColumnDefinition;
 import io.prestosql.sql.tree.Comment;
 import io.prestosql.sql.tree.Commit;
 import io.prestosql.sql.tree.CompoundStatement;
-import io.prestosql.sql.tree.CreateFunction;
 import io.prestosql.sql.tree.CreateRole;
 import io.prestosql.sql.tree.CreateSchema;
 import io.prestosql.sql.tree.CreateTable;
@@ -41,7 +40,6 @@ import io.prestosql.sql.tree.Delete;
 import io.prestosql.sql.tree.DescribeInput;
 import io.prestosql.sql.tree.DescribeOutput;
 import io.prestosql.sql.tree.DropColumn;
-import io.prestosql.sql.tree.DropFunction;
 import io.prestosql.sql.tree.DropRole;
 import io.prestosql.sql.tree.DropSchema;
 import io.prestosql.sql.tree.DropTable;
@@ -56,6 +54,7 @@ import io.prestosql.sql.tree.ExplainOption;
 import io.prestosql.sql.tree.ExplainType;
 import io.prestosql.sql.tree.Expression;
 import io.prestosql.sql.tree.FetchFirst;
+import io.prestosql.sql.tree.FunctionSpecification;
 import io.prestosql.sql.tree.Grant;
 import io.prestosql.sql.tree.GrantRoles;
 import io.prestosql.sql.tree.GrantorSpecification;
@@ -76,6 +75,7 @@ import io.prestosql.sql.tree.Limit;
 import io.prestosql.sql.tree.LoopStatement;
 import io.prestosql.sql.tree.NaturalJoin;
 import io.prestosql.sql.tree.Node;
+import io.prestosql.sql.tree.NullInputCharacteristic;
 import io.prestosql.sql.tree.Offset;
 import io.prestosql.sql.tree.OrderBy;
 import io.prestosql.sql.tree.ParameterDeclaration;
@@ -96,7 +96,7 @@ import io.prestosql.sql.tree.ReturnStatement;
 import io.prestosql.sql.tree.Revoke;
 import io.prestosql.sql.tree.RevokeRoles;
 import io.prestosql.sql.tree.Rollback;
-import io.prestosql.sql.tree.RoutineCharacteristics;
+import io.prestosql.sql.tree.RoutineCharacteristic;
 import io.prestosql.sql.tree.Row;
 import io.prestosql.sql.tree.SampledRelation;
 import io.prestosql.sql.tree.Select;
@@ -264,6 +264,18 @@ public final class SqlFormatter
         @Override
         protected Void visitQuery(Query node, Integer indent)
         {
+            if (!node.getFunctions().isEmpty()) {
+                builder.append("WITH\n  ");
+                Iterator<FunctionSpecification> functions = node.getFunctions().iterator();
+                while (functions.hasNext()) {
+                    process(functions.next(), indent);
+                    builder.append('\n');
+                    if (functions.hasNext()) {
+                        builder.append(", ");
+                    }
+                }
+            }
+
             if (node.getWith().isPresent()) {
                 With with = node.getWith().get();
                 append(indent, "WITH");
@@ -1374,12 +1386,8 @@ public final class SqlFormatter
         }
 
         @Override
-        protected Void visitCreateFunction(CreateFunction node, Integer indent)
+        protected Void visitFunctionSpecification(FunctionSpecification node, Integer indent)
         {
-            builder.append("CREATE ");
-            if (node.isReplace()) {
-                builder.append("OR REPLACE ");
-            }
             builder.append("FUNCTION ")
                     .append(node.getName())
                     .append("(");
@@ -1387,20 +1395,11 @@ public final class SqlFormatter
             builder.append(")\n");
             process(node.getReturnClause(), indent);
             builder.append("\n");
-            process(node.getRoutineCharacteristics(), indent);
-            process(node.getStatement(), indent);
-
-            return null;
-        }
-
-        @Override
-        protected Void visitDropFunction(DropFunction node, Integer indent)
-        {
-            builder.append("DROP FUNCTION ");
-            if (node.isExists()) {
-                builder.append("IF EXISTS ");
+            for (RoutineCharacteristic characteristic : node.getRoutineCharacteristics()) {
+                process(characteristic, indent);
+                builder.append("\n");
             }
-            builder.append(node.getName());
+            process(node.getStatement(), indent);
 
             return null;
         }
@@ -1425,49 +1424,14 @@ public final class SqlFormatter
         }
 
         @Override
-        protected Void visitRoutineCharacteristics(RoutineCharacteristics node, Integer indent)
+        protected Void visitNullInputCharacteristic(NullInputCharacteristic node, Integer context)
         {
-            for (QualifiedName qualifiedName : node.getSpecificCharacteristics()) {
-                builder.append("SPECIFIC ")
-                        .append(qualifiedName)
-                        .append("\n");
+            if (node.isCalledOnNull()) {
+                builder.append("CALLED ON NULL INPUT");
             }
-            if (node.isDeterministic().isPresent()) {
-                if (!node.isDeterministic().get()) {
-                    builder.append("NOT ");
-                }
-                builder.append("DETERMINISTIC\n");
+            else {
+                builder.append("RETURNS NULL ON NULL INPUT");
             }
-            if (node.getSqlDataAccessType().isPresent()) {
-                switch (node.getSqlDataAccessType().get()) {
-                    case NO_SQL:
-                        builder.append("NO SQL\n");
-                        break;
-                    case CONTAINS_SQL:
-                        builder.append("CONTAINS SQL\n");
-                        break;
-                    case READS_SQL_DATA:
-                        builder.append("READS SQL DATA\n");
-                        break;
-                    case MODIFIES_SQL_DATA:
-                        builder.append("MODIFIES SQL DATA\n");
-                        break;
-                }
-            }
-            if (node.isReturnsNullOnNullInput().isPresent()) {
-                if (node.isReturnsNullOnNullInput().get()) {
-                    builder.append("RETURNS NULL ON NULL INPUT\n");
-                }
-                else {
-                    builder.append("CALLED ON NULL INPUT\n");
-                }
-            }
-            if (node.getDynamicResultSets().isPresent()) {
-                builder.append("DYNAMIC RESULT SETS ")
-                        .append(node.getDynamicResultSets())
-                        .append("\n");
-            }
-
             return null;
         }
 

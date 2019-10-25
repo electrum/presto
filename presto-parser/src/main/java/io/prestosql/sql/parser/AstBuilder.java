@@ -43,7 +43,6 @@ import io.prestosql.sql.tree.Comment;
 import io.prestosql.sql.tree.Commit;
 import io.prestosql.sql.tree.ComparisonExpression;
 import io.prestosql.sql.tree.CompoundStatement;
-import io.prestosql.sql.tree.CreateFunction;
 import io.prestosql.sql.tree.CreateRole;
 import io.prestosql.sql.tree.CreateSchema;
 import io.prestosql.sql.tree.CreateTable;
@@ -62,10 +61,8 @@ import io.prestosql.sql.tree.Delete;
 import io.prestosql.sql.tree.DereferenceExpression;
 import io.prestosql.sql.tree.DescribeInput;
 import io.prestosql.sql.tree.DescribeOutput;
-import io.prestosql.sql.tree.DeterministicCharacteristic;
 import io.prestosql.sql.tree.DoubleLiteral;
 import io.prestosql.sql.tree.DropColumn;
-import io.prestosql.sql.tree.DropFunction;
 import io.prestosql.sql.tree.DropRole;
 import io.prestosql.sql.tree.DropSchema;
 import io.prestosql.sql.tree.DropTable;
@@ -86,6 +83,7 @@ import io.prestosql.sql.tree.Format;
 import io.prestosql.sql.tree.FrameBound;
 import io.prestosql.sql.tree.FunctionCall;
 import io.prestosql.sql.tree.FunctionCall.NullTreatment;
+import io.prestosql.sql.tree.FunctionSpecification;
 import io.prestosql.sql.tree.GenericDataType;
 import io.prestosql.sql.tree.GenericLiteral;
 import io.prestosql.sql.tree.Grant;
@@ -151,13 +149,11 @@ import io.prestosql.sql.tree.RepeatStatement;
 import io.prestosql.sql.tree.ResetSession;
 import io.prestosql.sql.tree.ReturnClause;
 import io.prestosql.sql.tree.ReturnStatement;
-import io.prestosql.sql.tree.ReturnedResultSetsCharacteristic;
 import io.prestosql.sql.tree.Revoke;
 import io.prestosql.sql.tree.RevokeRoles;
 import io.prestosql.sql.tree.Rollback;
 import io.prestosql.sql.tree.Rollup;
 import io.prestosql.sql.tree.RoutineCharacteristic;
-import io.prestosql.sql.tree.RoutineCharacteristics;
 import io.prestosql.sql.tree.Row;
 import io.prestosql.sql.tree.RowDataType;
 import io.prestosql.sql.tree.SampledRelation;
@@ -182,8 +178,6 @@ import io.prestosql.sql.tree.SimpleCaseExpression;
 import io.prestosql.sql.tree.SimpleGroupBy;
 import io.prestosql.sql.tree.SingleColumn;
 import io.prestosql.sql.tree.SortItem;
-import io.prestosql.sql.tree.SpecificCharacteristic;
-import io.prestosql.sql.tree.SqlDataAccessCharacteristic;
 import io.prestosql.sql.tree.StartTransaction;
 import io.prestosql.sql.tree.Statement;
 import io.prestosql.sql.tree.StringLiteral;
@@ -219,6 +213,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
+import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.prestosql.sql.QueryUtil.query;
@@ -591,6 +586,10 @@ class AstBuilder
 
         return new Query(
                 getLocation(context),
+                Optional.ofNullable(context.withFunction())
+                        .map(SqlBaseParser.WithFunctionContext::functionSpecification)
+                        .map(contexts -> visit(contexts, FunctionSpecification.class))
+                        .orElseGet(ImmutableList::of),
                 visitIfPresent(context.with(), With.class),
                 body.getQueryBody(),
                 body.getOrderBy(),
@@ -653,6 +652,7 @@ class AstBuilder
 
             return new Query(
                     getLocation(context),
+                    ImmutableList.of(),
                     Optional.empty(),
                     new QuerySpecification(
                             getLocation(context),
@@ -671,6 +671,7 @@ class AstBuilder
 
         return new Query(
                 getLocation(context),
+                ImmutableList.of(),
                 Optional.empty(),
                 term,
                 orderBy,
@@ -2031,25 +2032,15 @@ class AstBuilder
     // ***************** functions & stored procedures *****************
 
     @Override
-    public Node visitCreateFunction(SqlBaseParser.CreateFunctionContext context)
+    public Node visitFunctionSpecification(SqlBaseParser.FunctionSpecificationContext context)
     {
-        return new CreateFunction(
+        return new FunctionSpecification(
                 getLocation(context),
                 getQualifiedName(context.qualifiedName()),
                 visit(context.parameterDeclarationList().parameterDeclaration(), ParameterDeclaration.class),
                 (ReturnClause) visit(context.returnsClause()),
-                gatherRoutineCharacteristics(context.routineCharacteristic()),
-                (Statement) visitRoutineStatement(context.routineStatement()),
-                context.REPLACE() != null);
-    }
-
-    @Override
-    public Node visitDropFunction(SqlBaseParser.DropFunctionContext context)
-    {
-        return new DropFunction(
-                getLocation(context),
-                getQualifiedName(context.qualifiedName()),
-                context.EXISTS() != null);
+                visit(context.routineCharacteristic(), RoutineCharacteristic.class),
+                (Statement) visit(firstNonNull(context.returnStatement(), context.compoundStatement())));
     }
 
     @Override
@@ -2076,53 +2067,6 @@ class AstBuilder
                 visitIfPresent(context.castFromType, DataType.class));
     }
 
-    private RoutineCharacteristics gatherRoutineCharacteristics(List<SqlBaseParser.RoutineCharacteristicContext> contexts)
-    {
-        return new RoutineCharacteristics(visit(contexts, RoutineCharacteristic.class));
-    }
-
-    @Override
-    public Node visitSpecificCharacteristic(SqlBaseParser.SpecificCharacteristicContext context)
-    {
-        return new SpecificCharacteristic(getLocation(context), getQualifiedName(context.value));
-    }
-
-    @Override
-    public Node visitIsDeterministicCharacteristic(SqlBaseParser.IsDeterministicCharacteristicContext context)
-    {
-        return DeterministicCharacteristic.deterministic(getLocation(context));
-    }
-
-    @Override
-    public Node visitIsNotDeterministicCharacteristic(SqlBaseParser.IsNotDeterministicCharacteristicContext context)
-    {
-        return DeterministicCharacteristic.notDeterministic(getLocation(context));
-    }
-
-    @Override
-    public Node visitNoSqlAccessCharacteristic(SqlBaseParser.NoSqlAccessCharacteristicContext context)
-    {
-        return SqlDataAccessCharacteristic.noSql(getLocation(context));
-    }
-
-    @Override
-    public Node visitContainsSqlAccessCharacteristic(SqlBaseParser.ContainsSqlAccessCharacteristicContext context)
-    {
-        return SqlDataAccessCharacteristic.containsSql(getLocation(context));
-    }
-
-    @Override
-    public Node visitReadsSqlDataAccessCharacteristic(SqlBaseParser.ReadsSqlDataAccessCharacteristicContext context)
-    {
-        return SqlDataAccessCharacteristic.readsSqlData(getLocation(context));
-    }
-
-    @Override
-    public Node visitModifiesSqlDataAccessCharacteristic(SqlBaseParser.ModifiesSqlDataAccessCharacteristicContext context)
-    {
-        return SqlDataAccessCharacteristic.modifiesSqlData(getLocation(context));
-    }
-
     @Override
     public Node visitReturnsNullOnNullInputCharacteristic(SqlBaseParser.ReturnsNullOnNullInputCharacteristicContext context)
     {
@@ -2133,12 +2077,6 @@ class AstBuilder
     public Node visitCalledOnNullInputCharacteristic(SqlBaseParser.CalledOnNullInputCharacteristicContext context)
     {
         return NullInputCharacteristic.calledOnNullInput(getLocation(context));
-    }
-
-    @Override
-    public Node visitReturnedResultSetsCharacteristic(SqlBaseParser.ReturnedResultSetsCharacteristicContext context)
-    {
-        return new ReturnedResultSetsCharacteristic(getLocation(context), Integer.parseInt(context.value.getText()));
     }
 
     @Override
