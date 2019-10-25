@@ -768,11 +768,11 @@ DOUBLE_VALUE
     ;
 
 IDENTIFIER
-    : (LETTER | '_') (LETTER | DIGIT | '_' | '@' | ':')*
+    : (LETTER | '_') (LETTER | DIGIT | '_')*
     ;
 
 DIGIT_IDENTIFIER
-    : DIGIT (LETTER | DIGIT | '_' | '@' | ':')+
+    : DIGIT (LETTER | DIGIT | '_')+
     ;
 
 QUOTED_IDENTIFIER
