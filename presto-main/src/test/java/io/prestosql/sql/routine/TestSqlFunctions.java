@@ -125,6 +125,7 @@ public class TestSqlFunctions
                 "    WHEN 20.0E0 THEN RETURN 'twenty';\n" +
                 "    ELSE RETURN 'other';\n" +
                 "  END CASE;\n" +
+                "  RETURN NULL;\n" +
                 "END\n" +
                 "SELECT simple_case(42)"));
 
@@ -151,6 +152,7 @@ public class TestSqlFunctions
                 "    WHEN b = 20.0E0 THEN RETURN 'twenty';\n" +
                 "    ELSE RETURN 'other';\n" +
                 "  END CASE;\n" +
+                "  RETURN NULL;\n" +
                 "END\n" +
                 "SELECT searched_case(42, 42)");
 

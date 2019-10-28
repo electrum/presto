@@ -45,6 +45,7 @@ import io.prestosql.sql.tree.ParameterDeclaration;
 import io.prestosql.sql.tree.RepeatStatement;
 import io.prestosql.sql.tree.ReturnClause;
 import io.prestosql.sql.tree.ReturnStatement;
+import io.prestosql.sql.tree.Statement;
 import io.prestosql.sql.tree.VariableDeclaration;
 import io.prestosql.sql.tree.WhileStatement;
 import io.prestosql.type.TypeCoercion;
@@ -60,20 +61,20 @@ import java.util.Set;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.collect.ImmutableList.toImmutableList;
+import static com.google.common.collect.Iterables.getLast;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.prestosql.spi.StandardErrorCode.ALREADY_EXISTS;
 import static io.prestosql.spi.StandardErrorCode.INVALID_ARGUMENTS;
+import static io.prestosql.spi.StandardErrorCode.MISSING_RETURN;
 import static io.prestosql.spi.StandardErrorCode.NOT_FOUND;
 import static io.prestosql.spi.StandardErrorCode.NOT_SUPPORTED;
 import static io.prestosql.spi.StandardErrorCode.SYNTAX_ERROR;
 import static io.prestosql.spi.StandardErrorCode.TYPE_MISMATCH;
 import static io.prestosql.spi.type.BooleanType.BOOLEAN;
-import static io.prestosql.sql.analyzer.SemanticExceptions.notSupportedException;
 import static io.prestosql.sql.analyzer.SemanticExceptions.semanticException;
 import static io.prestosql.sql.analyzer.TypeSignatureTranslator.toTypeSignature;
 import static io.prestosql.sql.planner.DeterminismEvaluator.isDeterministic;
 import static java.lang.String.format;
-import static java.util.Locale.ENGLISH;
 import static java.util.Objects.requireNonNull;
 
 public class SqlRoutineAnalyzer
@@ -92,7 +93,7 @@ public class SqlRoutineAnalyzer
     public SqlRoutineAnalysis analyze(FunctionSpecification function)
     {
         if (function.getName().getPrefix().isPresent()) {
-            throw notSupportedException(function, "Qualified function names not yet supported");
+            throw semanticException(NOT_SUPPORTED, function, "Qualified function name is not supported");
         }
         String functionName = function.getName().getSuffix();
 
@@ -100,26 +101,13 @@ public class SqlRoutineAnalyzer
 
         ReturnClause returnClause = function.getReturnClause();
         if (returnClause.getCastFromType().isPresent()) {
-            throw notSupportedException(returnClause, "RETURNS CAST FROM not yet supported");
+            throw semanticException(NOT_SUPPORTED, returnClause, "RETURNS CAST FROM is not yet supported");
         }
         Type returnType = getType(returnClause, returnClause.getReturnType());
 
-        ImmutableMap.Builder<String, Type> argumentsBuilder = ImmutableMap.builder();
-        for (ParameterDeclaration parameter : function.getParameters()) {
-            if (parameter.getMode().isPresent()) {
-                throw semanticException(INVALID_ARGUMENTS, parameter, "Function parameters must not have a mode");
-            }
-            if (parameter.getDefaultValue().isPresent()) {
-                throw semanticException(INVALID_ARGUMENTS, parameter, "Function parameters must not have a default");
-            }
-            if (!parameter.getName().isPresent()) {
-                throw semanticException(INVALID_ARGUMENTS, parameter, "Function parameters must have a name");
-            }
-            String name = parameter.getName().get().toLowerCase(ENGLISH);
-            Type type = getType(parameter, parameter.getType());
-            argumentsBuilder.put(name, type);
-        }
-        Map<String, Type> arguments = argumentsBuilder.build();
+        Map<String, Type> arguments = getArguments(function);
+
+        validateReturn(function);
 
         StatementVisitor visitor = new StatementVisitor(returnType, arguments);
         visitor.process(function.getStatement(), null);
@@ -145,6 +133,26 @@ public class SqlRoutineAnalyzer
         }
     }
 
+    private Map<String, Type> getArguments(FunctionSpecification function)
+    {
+        ImmutableMap.Builder<String, Type> arguments = ImmutableMap.builder();
+        for (ParameterDeclaration parameter : function.getParameters()) {
+            if (parameter.getMode().isPresent()) {
+                throw semanticException(INVALID_ARGUMENTS, parameter, "Function parameters must not have a mode");
+            }
+            if (parameter.getDefaultValue().isPresent()) {
+                throw semanticException(INVALID_ARGUMENTS, parameter, "Function parameters must not have a default");
+            }
+            if (!parameter.getName().isPresent()) {
+                throw semanticException(INVALID_ARGUMENTS, parameter, "Function parameters must have a name");
+            }
+            String name = parameter.getName().get();
+            Type type = getType(parameter, parameter.getType());
+            arguments.put(name, type);
+        }
+        return arguments.build();
+    }
+
     private static boolean isCalledOnNull(FunctionSpecification function)
     {
         List<NullInputCharacteristic> nullInput = function.getRoutineCharacteristics().stream()
@@ -160,6 +168,20 @@ public class SqlRoutineAnalyzer
                 .map(NullInputCharacteristic::isCalledOnNull)
                 .findAny()
                 .orElse(true);
+    }
+
+    private static void validateReturn(FunctionSpecification function)
+    {
+        Statement statement = function.getStatement();
+        if (statement instanceof ReturnStatement) {
+            return;
+        }
+
+        checkArgument(statement instanceof CompoundStatement, "invalid function statement: %s", statement);
+        CompoundStatement body = (CompoundStatement) statement;
+        if (!(getLast(body.getStatements(), null) instanceof ReturnStatement)) {
+            throw semanticException(MISSING_RETURN, body, "Function must end in a RETURN statement");
+        }
     }
 
     private class StatementVisitor
@@ -206,14 +228,14 @@ public class SqlRoutineAnalyzer
         @Override
         protected Void visitNode(Node node, Void context)
         {
-            throw notSupportedException(node, "Analysis not yet implemented: " + node);
+            throw new UnsupportedOperationException("Analysis not yet implemented: " + node);
         }
 
         @Override
         protected Void visitCompoundStatement(CompoundStatement node, Void context)
         {
             if (node.getLabel().isPresent()) {
-                throw notSupportedException(node, "Labels not yet supported");
+                throw semanticException(NOT_SUPPORTED, node, "Labels not yet supported");
             }
 
             for (VariableDeclaration declaration : node.getVariableDeclarations()) {
@@ -335,7 +357,7 @@ public class SqlRoutineAnalyzer
         protected Void visitAssignmentStatement(AssignmentStatement node, Void context)
         {
             if (node.getTargets().size() > 1) {
-                throw notSupportedException(node, "Multiple targets for SET not yet supported");
+                throw semanticException(NOT_SUPPORTED, node, "Multiple targets for SET not yet supported");
             }
             String name = getOnlyElement(node.getTargets());
             Type targetType = scopeVariables.get(name);
@@ -395,7 +417,7 @@ public class SqlRoutineAnalyzer
             addTypes(analyzer.getExpressionTypes());
             addCoercions(analyzer.getExpressionCoercions(), analyzer.getTypeOnlyCoercions());
 
-            determinstic |= isDeterministic(expression, functionCall -> {
+            determinstic &= isDeterministic(expression, functionCall -> {
                 ResolvedFunction resolvedFunction = analyzer.getResolvedFunctions().get(NodeRef.of(functionCall));
                 checkArgument(resolvedFunction != null, "function call is not resolved: %s", functionCall);
                 return metadata.getFunctionMetadata(resolvedFunction);
