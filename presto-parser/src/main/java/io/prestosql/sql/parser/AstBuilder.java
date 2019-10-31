@@ -325,7 +325,7 @@ class AstBuilder
         return new CreateTableAsSelect(
                 getLocation(context),
                 getQualifiedName(context.qualifiedName()),
-                (Query) visit(context.query()),
+                (Query) visit(context.rootQuery()),
                 context.EXISTS() != null,
                 properties,
                 context.NO() == null,
@@ -382,7 +382,7 @@ class AstBuilder
         return new Insert(
                 getQualifiedName(context.qualifiedName()),
                 columnAliases,
-                (Query) visit(context.query()));
+                (Query) visit(context.rootQuery()));
     }
 
     @Override
@@ -461,7 +461,7 @@ class AstBuilder
         return new CreateView(
                 getLocation(context),
                 getQualifiedName(context.qualifiedName()),
-                (Query) visit(context.query()),
+                (Query) visit(context.rootQuery()),
                 context.REPLACE() != null,
                 security);
     }
@@ -580,9 +580,9 @@ class AstBuilder
     // ********************** query expressions ********************
 
     @Override
-    public Node visitQuery(SqlBaseParser.QueryContext context)
+    public Node visitRootQuery(SqlBaseParser.RootQueryContext context)
     {
-        Query body = (Query) visit(context.queryNoWith());
+        Query query = (Query) visit(context.query());
 
         return new Query(
                 getLocation(context),
@@ -590,6 +590,21 @@ class AstBuilder
                         .map(SqlBaseParser.WithFunctionContext::functionSpecification)
                         .map(contexts -> visit(contexts, FunctionSpecification.class))
                         .orElseGet(ImmutableList::of),
+                query.getWith(),
+                query.getQueryBody(),
+                query.getOrderBy(),
+                query.getOffset(),
+                query.getLimit());
+    }
+
+    @Override
+    public Node visitQuery(SqlBaseParser.QueryContext context)
+    {
+        Query body = (Query) visit(context.queryNoWith());
+
+        return new Query(
+                getLocation(context),
+                ImmutableList.of(),
                 visitIfPresent(context.with(), With.class),
                 body.getQueryBody(),
                 body.getOrderBy(),

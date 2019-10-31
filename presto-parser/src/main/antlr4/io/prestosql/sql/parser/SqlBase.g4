@@ -35,7 +35,7 @@ standaloneType
     ;
 
 statement
-    : query                                                            #statementDefault
+    : rootQuery                                                        #statementDefault
     | USE schema=identifier                                            #use
     | USE catalog=identifier '.' schema=identifier                     #use
     | CREATE SCHEMA (IF NOT EXISTS)? qualifiedName
@@ -44,14 +44,14 @@ statement
     | ALTER SCHEMA qualifiedName RENAME TO identifier                  #renameSchema
     | CREATE TABLE (IF NOT EXISTS)? qualifiedName columnAliases?
         (COMMENT string)?
-        (WITH properties)? AS (query | '('query')')
+        (WITH properties)? AS (rootQuery | '(' rootQuery ')')
         (WITH (NO)? DATA)?                                             #createTableAsSelect
     | CREATE TABLE (IF NOT EXISTS)? qualifiedName
         '(' tableElement (',' tableElement)* ')'
          (COMMENT string)?
          (WITH properties)?                                            #createTable
     | DROP TABLE (IF EXISTS)? qualifiedName                            #dropTable
-    | INSERT INTO qualifiedName columnAliases? query                   #insertInto
+    | INSERT INTO qualifiedName columnAliases? rootQuery               #insertInto
     | DELETE FROM qualifiedName (WHERE booleanExpression)?             #delete
     | ALTER TABLE from=qualifiedName RENAME TO to=qualifiedName        #renameTable
     | COMMENT ON TABLE qualifiedName IS (string | NULL)                #commentTable
@@ -63,7 +63,7 @@ statement
         ADD COLUMN column=columnDefinition                             #addColumn
     | ANALYZE qualifiedName (WITH properties)?                         #analyze
     | CREATE (OR REPLACE)? VIEW qualifiedName
-        (SECURITY (DEFINER | INVOKER))? AS query                       #createView
+        (SECURITY (DEFINER | INVOKER))? AS rootQuery                   #createView
     | DROP VIEW (IF EXISTS)? qualifiedName                             #dropView
     | CALL qualifiedName '(' (callArgument (',' callArgument)*)? ')'   #call
     | CREATE ROLE name=identifier
@@ -121,12 +121,16 @@ statement
     | SET PATH pathSpecification                                       #setPath
     ;
 
-query
-    : withFunction? with? queryNoWith
+rootQuery
+    : withFunction? query
     ;
 
 withFunction
     : WITH functionSpecification (',' functionSpecification)*
+    ;
+
+query
+    : with? queryNoWith
     ;
 
 with
