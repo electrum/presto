@@ -14,8 +14,10 @@
 package io.prestosql.plugin.hive.parquet;
 
 import com.google.common.collect.ImmutableList;
+import io.prestosql.parquet.writer.ParquetSchemaConverter;
 import io.prestosql.parquet.writer.ParquetWriter;
 import io.prestosql.parquet.writer.ParquetWriterOptions;
+import io.prestosql.parquet.writer.PrimitiveTypeConverter;
 import io.prestosql.plugin.hive.FileWriter;
 import io.prestosql.spi.Page;
 import io.prestosql.spi.PrestoException;
@@ -52,16 +54,18 @@ public class ParquetFileWriter
             Callable<Void> rollbackAction,
             List<String> columnNames,
             List<Type> fileColumnTypes,
+            PrimitiveTypeConverter primitiveTypeConverter,
             ParquetWriterOptions parquetWriterOptions,
             int[] fileInputColumnIndexes,
             CompressionCodecName compressionCodecName)
     {
         requireNonNull(outputStream, "outputStream is null");
 
+        ParquetSchemaConverter schemaConverter = new ParquetSchemaConverter(fileColumnTypes, columnNames, primitiveTypeConverter);
+
         this.parquetWriter = new ParquetWriter(
                 outputStream,
-                columnNames,
-                fileColumnTypes,
+                schemaConverter,
                 parquetWriterOptions,
                 compressionCodecName);
 

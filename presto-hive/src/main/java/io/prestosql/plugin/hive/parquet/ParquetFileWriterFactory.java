@@ -13,6 +13,7 @@
  */
 package io.prestosql.plugin.hive.parquet;
 
+import io.prestosql.parquet.writer.HiveParquetPrimitiveTypeConverter;
 import io.prestosql.parquet.writer.ParquetWriterOptions;
 import io.prestosql.plugin.hive.FileWriter;
 import io.prestosql.plugin.hive.HdfsEnvironment;
@@ -127,6 +128,7 @@ public class ParquetFileWriterFactory
                     rollbackAction,
                     fileColumnNames,
                     fileColumnTypes,
+                    HiveParquetPrimitiveTypeConverter.INSTANCE,
                     parquetWriterOptions,
                     fileInputColumnIndexes,
                     compressionCodecName));
@@ -136,7 +138,7 @@ public class ParquetFileWriterFactory
         }
     }
 
-    private static CompressionCodecName getCompression(JobConf configuration)
+    public static CompressionCodecName getCompression(JobConf configuration)
     {
         String compressionName = configuration.get(ParquetOutputFormat.COMPRESSION);
         if (compressionName == null) {

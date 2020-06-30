@@ -21,7 +21,6 @@ import io.airlift.slice.Slices;
 import io.airlift.units.DataSize;
 import io.prestosql.parquet.writer.ColumnWriter.BufferData;
 import io.prestosql.spi.Page;
-import io.prestosql.spi.type.Type;
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.FileMetaData;
@@ -60,14 +59,12 @@ public class ParquetWriter
 
     private final List<ColumnWriter> columnWriters;
     private final OutputStreamSliceOutput outputStream;
-    private final List<Type> types;
     private final ParquetWriterOptions writerOption;
-    private final List<String> names;
     private final MessageType messageType;
 
     private final int chunkMaxLogicalBytes;
 
-    private ImmutableList.Builder<RowGroup> rowGroupBuilder = ImmutableList.builder();
+    private final ImmutableList.Builder<RowGroup> rowGroupBuilder = ImmutableList.builder();
 
     private int rows;
     private long bufferedBytes;
@@ -78,20 +75,14 @@ public class ParquetWriter
 
     public ParquetWriter(
             OutputStream outputStream,
-            List<String> columnNames,
-            List<Type> types,
+            ParquetSchemaConverter parquetSchemaConverter,
             ParquetWriterOptions writerOption,
             CompressionCodecName compressionCodecName)
     {
         this.outputStream = new OutputStreamSliceOutput(requireNonNull(outputStream, "outputstream is null"));
-        this.names = ImmutableList.copyOf(requireNonNull(columnNames, "columnNames is null"));
-        this.types = ImmutableList.copyOf(requireNonNull(types, "types is null"));
         this.writerOption = requireNonNull(writerOption, "writerOption is null");
         requireNonNull(compressionCodecName, "compressionCodecName is null");
 
-        checkArgument(types.size() == columnNames.size(), "type size %s is not equal to name size %s", types.size(), columnNames.size());
-
-        ParquetSchemaConverter parquetSchemaConverter = new ParquetSchemaConverter(types, columnNames);
         this.messageType = parquetSchemaConverter.getMessageType();
 
         ParquetProperties parquetProperties = ParquetProperties.builder()

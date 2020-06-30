@@ -41,16 +41,7 @@ public class DecimalValueWriter
     @Override
     public void write(Block block)
     {
-        if (decimalType.getPrecision() <= 9) {
-            for (int i = 0; i < block.getPositionCount(); ++i) {
-                if (!block.isNull(i)) {
-                    int value = (int) decimalType.getLong(block, i);
-                    getValueWriter().writeInteger(value);
-                    getStatistics().updateStats(value);
-                }
-            }
-        }
-        else if (decimalType.isShort()) {
+        if (decimalType.isShort()) {
             for (int i = 0; i < block.getPositionCount(); ++i) {
                 if (!block.isNull(i)) {
                     long value = decimalType.getLong(block, i);

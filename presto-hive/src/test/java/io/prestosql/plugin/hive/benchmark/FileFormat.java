@@ -21,6 +21,7 @@ import io.prestosql.orc.OrcWriterOptions;
 import io.prestosql.orc.OrcWriterStats;
 import io.prestosql.orc.OutputStreamOrcDataSink;
 import io.prestosql.orc.metadata.OrcType;
+import io.prestosql.parquet.writer.ParquetSchemaConverter;
 import io.prestosql.parquet.writer.ParquetWriter;
 import io.prestosql.parquet.writer.ParquetWriterOptions;
 import io.prestosql.plugin.hive.FileFormatDataSourceStats;
@@ -501,8 +502,7 @@ public enum FileFormat
         {
             writer = new ParquetWriter(
                     new FileOutputStream(targetFile),
-                    columnNames,
-                    types,
+                    new ParquetSchemaConverter(types, columnNames),
                     ParquetWriterOptions.builder().build(),
                     compressionCodec.getParquetCompressionCodec());
         }
