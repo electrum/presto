@@ -14,10 +14,8 @@
 package io.prestosql.plugin.hive.parquet;
 
 import com.google.common.collect.ImmutableList;
-import io.prestosql.parquet.writer.ParquetSchemaConverter;
 import io.prestosql.parquet.writer.ParquetWriter;
 import io.prestosql.parquet.writer.ParquetWriterOptions;
-import io.prestosql.parquet.writer.PrimitiveTypeConverter;
 import io.prestosql.plugin.hive.FileWriter;
 import io.prestosql.spi.Page;
 import io.prestosql.spi.PrestoException;
@@ -26,12 +24,14 @@ import io.prestosql.spi.block.BlockBuilder;
 import io.prestosql.spi.block.RunLengthEncodedBlock;
 import io.prestosql.spi.type.Type;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.schema.MessageType;
 import org.openjdk.jol.info.ClassLayout;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
@@ -52,20 +52,19 @@ public class ParquetFileWriter
     public ParquetFileWriter(
             OutputStream outputStream,
             Callable<Void> rollbackAction,
-            List<String> columnNames,
             List<Type> fileColumnTypes,
-            PrimitiveTypeConverter primitiveTypeConverter,
+            MessageType messageType,
+            Map<List<String>, Type> primitiveTypes,
             ParquetWriterOptions parquetWriterOptions,
             int[] fileInputColumnIndexes,
             CompressionCodecName compressionCodecName)
     {
         requireNonNull(outputStream, "outputStream is null");
 
-        ParquetSchemaConverter schemaConverter = new ParquetSchemaConverter(fileColumnTypes, columnNames, primitiveTypeConverter);
-
         this.parquetWriter = new ParquetWriter(
                 outputStream,
-                schemaConverter,
+                messageType,
+                primitiveTypes,
                 parquetWriterOptions,
                 compressionCodecName);
 

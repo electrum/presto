@@ -21,6 +21,7 @@ import io.prestosql.orc.OrcReaderOptions;
 import io.prestosql.orc.OrcWriterOptions;
 import io.prestosql.orc.OrcWriterStats;
 import io.prestosql.orc.OutputStreamOrcDataSink;
+import io.prestosql.parquet.writer.ParquetSchemaConverter;
 import io.prestosql.parquet.writer.ParquetWriterOptions;
 import io.prestosql.plugin.hive.FileFormatDataSourceStats;
 import io.prestosql.plugin.hive.HdfsEnvironment;
@@ -46,6 +47,7 @@ import org.apache.iceberg.Schema;
 import org.apache.iceberg.types.Types;
 import org.apache.parquet.hadoop.ParquetOutputFormat;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
+import org.apache.parquet.schema.MessageType;
 import org.weakref.jmx.Flatten;
 import org.weakref.jmx.Managed;
 
@@ -54,6 +56,7 @@ import javax.inject.Inject;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.Callable;
@@ -190,11 +193,14 @@ public class IcebergFileWriterFactory
                 return null;
             };
 
+            ParquetSchemaConverter schemaConverter = new ParquetSchemaConverter(fileColumnTypes, fileColumnNames, IcebergParquetPrimitiveTypeConverter.INSTANCE);
+
             return new IcebergParquetFileWriter(
                     fileSystem.create(outputPath),
                     rollbackAction,
                     fileColumnTypes,
-                    fileColumnNames,
+                    convert(icebergSchema, "table"),
+                    schemaConverter.getPrimitiveTypes(),
                     parquetWriterOptions,
                     fileInputColumnIndexes,
                     compressionCodecName);
@@ -277,9 +283,24 @@ public class IcebergFileWriterFactory
     public static class IcebergParquetFileWriter
             extends ParquetFileWriter implements IcebergFileWriter
     {
-        public IcebergParquetFileWriter(OutputStream outputStream, Callable<Void> rollbackAction, List<Type> fileColumnTypes, List<String> fileColumnNames, ParquetWriterOptions parquetWriterOptions, int[] fileInputColumnIndexes, CompressionCodecName compressionCodecName)
+        public IcebergParquetFileWriter(
+                OutputStream outputStream,
+                Callable<Void> rollbackAction,
+                List<Type> fileColumnTypes,
+                MessageType messageType,
+                Map<List<String>, Type> primitiveTypes,
+                ParquetWriterOptions parquetWriterOptions,
+                int[] fileInputColumnIndexes,
+                CompressionCodecName compressionCodecName)
         {
-            super(outputStream, rollbackAction, fileColumnNames, fileColumnTypes, IcebergParquetPrimitiveTypeConverter.INSTANCE, parquetWriterOptions, fileInputColumnIndexes, compressionCodecName);
+            super(outputStream,
+                    rollbackAction,
+                    fileColumnTypes,
+                    messageType,
+                    primitiveTypes,
+                    parquetWriterOptions,
+                    fileInputColumnIndexes,
+                    compressionCodecName);
         }
 
         @Override

@@ -713,9 +713,11 @@ public class ParquetTester
             throws Exception
     {
         checkArgument(types.size() == columnNames.size() && types.size() == values.length);
+        ParquetSchemaConverter schemaConverter = new ParquetSchemaConverter(types, columnNames);
         ParquetWriter writer = new ParquetWriter(
                 new FileOutputStream(outputFile),
-                new ParquetSchemaConverter(types, columnNames),
+                schemaConverter.getMessageType(),
+                schemaConverter.getPrimitiveTypes(),
                 ParquetWriterOptions.builder()
                         .setMaxPageSize(DataSize.ofBytes(100))
                         .setMaxBlockSize(DataSize.ofBytes(100000))

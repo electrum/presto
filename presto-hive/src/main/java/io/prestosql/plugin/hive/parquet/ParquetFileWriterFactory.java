@@ -14,6 +14,7 @@
 package io.prestosql.plugin.hive.parquet;
 
 import io.prestosql.parquet.writer.HiveParquetPrimitiveTypeConverter;
+import io.prestosql.parquet.writer.ParquetSchemaConverter;
 import io.prestosql.parquet.writer.ParquetWriterOptions;
 import io.prestosql.plugin.hive.FileWriter;
 import io.prestosql.plugin.hive.HdfsEnvironment;
@@ -123,12 +124,14 @@ public class ParquetFileWriterFactory
                 return null;
             };
 
+            ParquetSchemaConverter schemaConverter = new ParquetSchemaConverter(fileColumnTypes, fileColumnNames, HiveParquetPrimitiveTypeConverter.INSTANCE);
+
             return Optional.of(new ParquetFileWriter(
                     fileSystem.create(path),
                     rollbackAction,
-                    fileColumnNames,
                     fileColumnTypes,
-                    HiveParquetPrimitiveTypeConverter.INSTANCE,
+                    schemaConverter.getMessageType(),
+                    schemaConverter.getPrimitiveTypes(),
                     parquetWriterOptions,
                     fileInputColumnIndexes,
                     compressionCodecName));

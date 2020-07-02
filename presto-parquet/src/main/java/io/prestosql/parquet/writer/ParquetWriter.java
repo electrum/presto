@@ -21,6 +21,7 @@ import io.airlift.slice.Slices;
 import io.airlift.units.DataSize;
 import io.prestosql.parquet.writer.ColumnWriter.BufferData;
 import io.prestosql.spi.Page;
+import io.prestosql.spi.type.Type;
 import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.FileMetaData;
@@ -34,6 +35,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.List;
+import java.util.Map;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -75,7 +77,8 @@ public class ParquetWriter
 
     public ParquetWriter(
             OutputStream outputStream,
-            ParquetSchemaConverter parquetSchemaConverter,
+            MessageType messageType,
+            Map<List<String>, Type> primitiveTypes,
             ParquetWriterOptions writerOption,
             CompressionCodecName compressionCodecName)
     {
@@ -83,14 +86,14 @@ public class ParquetWriter
         this.writerOption = requireNonNull(writerOption, "writerOption is null");
         requireNonNull(compressionCodecName, "compressionCodecName is null");
 
-        this.messageType = parquetSchemaConverter.getMessageType();
+        this.messageType = messageType;
 
         ParquetProperties parquetProperties = ParquetProperties.builder()
                 .withWriterVersion(PARQUET_2_0)
                 .withPageSize(writerOption.getMaxPageSize())
                 .build();
 
-        this.columnWriters = ParquetWriters.getColumnWriters(messageType, parquetSchemaConverter.getPrimitiveTypes(), parquetProperties, compressionCodecName);
+        this.columnWriters = ParquetWriters.getColumnWriters(messageType, primitiveTypes, parquetProperties, compressionCodecName);
 
         this.chunkMaxLogicalBytes = max(1, CHUNK_MAX_BYTES / 2);
     }

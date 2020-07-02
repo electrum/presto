@@ -500,9 +500,12 @@ public enum FileFormat
         public PrestoParquetFormatWriter(File targetFile, List<String> columnNames, List<Type> types, HiveCompressionCodec compressionCodec)
                 throws IOException
         {
+            ParquetSchemaConverter schemaConverter = new ParquetSchemaConverter(types, columnNames);
+
             writer = new ParquetWriter(
                     new FileOutputStream(targetFile),
-                    new ParquetSchemaConverter(types, columnNames),
+                    schemaConverter.getMessageType(),
+                    schemaConverter.getPrimitiveTypes(),
                     ParquetWriterOptions.builder().build(),
                     compressionCodec.getParquetCompressionCodec());
         }
