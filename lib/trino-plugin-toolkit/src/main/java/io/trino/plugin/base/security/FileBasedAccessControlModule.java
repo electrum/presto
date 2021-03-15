@@ -18,26 +18,19 @@ import com.google.inject.Inject;
 import com.google.inject.Module;
 import com.google.inject.Provides;
 import io.airlift.log.Logger;
+import io.trino.plugin.base.CatalogName;
 import io.trino.spi.connector.ConnectorAccessControl;
 
 import java.io.File;
 
 import static com.google.common.base.Suppliers.memoizeWithExpiration;
 import static io.airlift.configuration.ConfigBinder.configBinder;
-import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class FileBasedAccessControlModule
         implements Module
 {
     private static final Logger log = Logger.get(FileBasedAccessControlModule.class);
-
-    private final String catalogName;
-
-    public FileBasedAccessControlModule(String catalogName)
-    {
-        this.catalogName = requireNonNull(catalogName, "catalogName is null");
-    }
 
     @Override
     public void configure(Binder binder)
@@ -47,18 +40,18 @@ public class FileBasedAccessControlModule
 
     @Inject
     @Provides
-    public ConnectorAccessControl getConnectorAccessControl(FileBasedAccessControlConfig config)
+    public ConnectorAccessControl getConnectorAccessControl(FileBasedAccessControlConfig config, CatalogName catalogName)
     {
         File configFile = config.getConfigFile();
         if (config.getRefreshPeriod() != null) {
             return ForwardingConnectorAccessControl.of(memoizeWithExpiration(
                     () -> {
                         log.info("Refreshing access control for catalog '%s' from: %s", catalogName, configFile);
-                        return new FileBasedAccessControl(catalogName, configFile);
+                        return new FileBasedAccessControl(catalogName.toString(), configFile);
                     },
                     config.getRefreshPeriod().toMillis(),
                     MILLISECONDS));
         }
-        return new FileBasedAccessControl(catalogName, configFile);
+        return new FileBasedAccessControl(catalogName.toString(), configFile);
     }
 }
